@@ -1,0 +1,271 @@
+% View link:https://www.overleaf.com/read/kbxcthnhcdhs#4bfb42
+
+\documentclass{jku-icg-report}
+
+% recommended packages
+\usepackage{booktabs}
+\usepackage{csquotes}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{float}
+\usepackage{url}
+
+\usepackage{svg}
+\graphicspath{{pics/}}
+
+
+
+
+% we recommend using biblatex for references
+\usepackage[
+    style=numeric,
+    backend=biber,
+    ]{biblatex}
+
+% only for blindtext (can be removed)
+%\usepackage{kantlipsum}
+
+% define the title and author as usual
+% the class adds a macro for the immatriculation number
+\title{Visual inspection of weather data and there effect on glacier retreat}
+\author{Mario Viehböck}
+\matrnum{k12345678}
+\date{\today}
+
+% add any number of supervisors
+\supervisor{DI Dr. Andreas Hinterreiter}
+\supervisor{DI Dr. Christina Humer}
+\supervisor{Univ.-Prof. Dr. Marc Streit}
+
+
+% add any number of keywords
+\keyword{Visual Analytics}
+\keyword{Climate Change}
+\keyword{Glacier}
+\keyword{Weather}
+\keyword{Artificial Intelligence}
+\keyword{Machine Learning}
+
+
+% provide some information on the course
+%     the year should be detected automatically
+%     if this does not work, use 'year = XXXX'
+\coursesetup{
+    subject = ai,       % 'ai' or 'cs'
+    study = bsc,        % 'bsc' or 'msc'
+    type = practical,   % 'practical', 'seminar', or 'thesis'
+    semester = winter,  % 'summer' or 'winter'
+}
+
+\addbibresource{references.bib}
+\renewcommand*{\bibfont}{\normalfont\footnotesize}
+
+\begin{document}
+
+% abstract must come before \maketitle
+\begin{abstract}
+    One fundamental part of an machine learning task is data selection. The more complex and larger the datasets are, the more important this is.
+
+    To select only necessary data and reject any redundant or unrelated ones, will potential increases the model accuracy and decreases complexity and the use of resources during training.
+    The objective of this project is to determine witch weather-data are most influential on glaciers. In order to do so, a interactive tool is provided, to discover different kinds of historical weather-data.
+
+\end{abstract}
+
+\maketitle
+
+\section{Introduction and Motivation}
+
+Glaciers are often seen as thermometer or a scale\footnote{\url{https://en.wikipedia.org/wiki/Retreat_of_glaciers_since_1850}}
+in terms of climate changes. They are not sensitive on short term weather variation but on long term changes. The understanding which parameters are responsible for the, at the time, fast shrinking of the ice masses are potentially important to understand the climate change better in general. To predict the behavior of this complex ice structures is difficult. To use the help of machine learning, might be a good idea. But you immediately come across a huge amount of data as the basis for such projects. This is where good data selection into play.
+\\
+\\
+The goal of this project in \textit{Practical Work in AI} is to implement a basic interactive visualization of sample weather data in combination with measured data from glaciers.
+
+For this, the project is split into the following \textbf{sub tasks}:
+\begin{itemize}
+    \setlength\itemsep{0cm}
+    \item Find data sources\ref{finding data sources}
+    \item Restrict the area of interest\ref{area of interest}
+    \item Determine there usability and check the data quality\ref{usability and quality}
+    \item Preprocess the data to make them usable in a visualization framework\ref{preprocess the data}
+    \item Implement an interactive visualization\ref{interactive visualization}
+\end{itemize}
+
+The focus is first on finding and processing data of high quality and high resolution where needed. And second on the implementation of the user interface.
+
+The tasks are tackled in an iterative approach. So each step gains the knowledge and requirements for the next one.
+
+
+
+
+
+
+\section{Finding Data Sources} \label{finding data sources}
+
+Two datasets are needed:
+\begin{itemize}
+    \setlength\itemsep{0cm}
+    \item Weather data (temperature, wind, ...)
+    \item Glacier data (change of the ice mass)
+\end{itemize}
+
+\textbf{Weather Data:}
+
+The ECMWF (European Center for Medium-Range Weather Forecasts) provides different kinds of suitable dataset.
+After some research the "\textit{ERA5 hourly data on single levels from 1940 to present}\footnote{\url{https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=documentation}}".
+The ERA5 datasets are widely used in scientific projects. More about the quality of the data in Section \ref{usability and quality}
+ERA5 covers the period from 1940 to present with an data point at every hour on a 31km grid over the whole planet. This with a variety of about 260 variables (not all of them cover the whole planet). The data were produced by the ECMWF Integrated Forecast System (IFS) and were the best I could find. It is also possible to use the ERA5 Land dataset for the Alps with a more dense grid of 9km if needed.
+
+An account is needed to request data from this source. But the account and the requests are free of charge.
+
+\vspace{0.2cm}
+
+\textbf{Glacier Data:}
+
+There exists one dedicated database for glacier measurement, the WGMS\footnote{\url{https://wgms.ch/data_databaseversions/}} (world glacier monitoring service). This organization collects global glacier measurements and provides a regularly updated dataset. Many information and measurements are included like: location, area, mass, and so on.
+
+
+%Some test citation~\cite{bach_time_2016}.
+%Some test footnote.\footnote{ \url{https://jku-vds-lab.at/}}
+
+
+%And an equation:
+%\begin{equation}
+%    \int_0^\infty \exp(-x^2) = \frac{\sqrt{\pi}}{2}
+%\end{equation}
+
+
+\section{Area of interest} \label{area of interest}
+
+The dataset from WGMS consists >20,000 glaciers worldwide. ERA5 covers the whole world with a 31km grid. Therefore, a restriction is necessary to reduce the amount of data to process.
+I decided to consider only the Apls without the Massif des Écrins.
+
+
+\vspace{0.2cm}
+\textbf{WGMS data:} \\
+This dataset contains 3909 glaciers. Some of them are sub-parts from bigger glacier structures but still independent. This fast and the high variaty of different variables (observations) needs further restriction. Goal 10-15 glaciers 1-2 variables.
+
+Most glaciers in this database are very inconsistent in their frequency of observation. During the research I found, there are reference glaciers. They are perfect for this task. Data at least once a year and high quality of each observation. So I picked all 11 reference glaciers in the Alps.
+
+
+\textbf{ERA5 data:} \\
+The restriction of the weather data is basically the the area of the central alps. This are can be specified when requesting data from the system.
+
+To be precise, this is the area of:
+
+\vspace{0.1cm}
+
+\begin{tabular}{ | m{5em} | m{2cm}|}
+  \hline
+  latitude & 49° - 45° \\
+  \hline
+  longitude & 5° - 17° \\
+  \hline
+\end{tabular}
+
+\section{Usability and quality of the data} \label{usability and quality}
+
+The next question was which measurement is the best suitable to describe the glacier change the best. After exploring all possible sub-datasets, the variable \textit{Mass Balance} is the best choice for this. Values like \textit{Area} or \textit{Thickness} are very specific to the landscape and make different shapes of glaciers incomparable to each other.
+
+
+\section{Preprocess the data} \label{preprocess the data}
+
+The preprocessing of the data to use them in Plotly was an iterative process. I will here state only the last and working approach.
+
+\vspace{0.2cm}
+\textbf{Preprocessing of the WGMS data:} \\
+The whole dataset contains 11 individual .csv files with different content.
+The idea is to get a single .csv file of the following shape:
+\vspace{-0.5cm}
+\begin{table}[h]
+    \caption{Example of a processed glacier dataset}
+    \centering
+    \begin{tabular}{| m{0.7cm} | m{1cm} | m{2.5cm}| m{1cm}| m{1cm}|}
+        \hline
+        Date & Name & Annual Mass Balance & Latitude & Longitude \\
+        \hline
+        1990 & Silvretta & -100.0 & 46.0 & 10.0 \\
+        \hline
+        ... & ... & ... & ... & ... \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Two things have to be done here:
+\begin{enumerate}
+    \item \textbf{Calculate the annual balance.} The measure of (in millimeters of water equivalent\footnote{\url{https://www.antarcticglaciers.org/glaciers-and-climate/estimating-glacier-contribution-to-sea-level-rise/}}
+    ) the mass balance is sometimes done more than once a year. To have one representative value for each glacier every year, the arithmetic mean is calculated whenever more than one value per year is in the list.
+    \item \textbf{Combining location and annual balance.} Hence the values for latitude and longitude are not in the same file as the balance values, they have to be extracted from another file. This is done according to the glacier names.
+\end{enumerate}
+
+
+\vspace{0.2cm}
+\textbf{Preprocessing of the ERA5 data:} \\
+The data are provident as a GRIB\footnote{\url{https://confluence.ecmwf.int/display/CKB/What+are+GRIB+files+and+how+can+I+read+them}} file. the library
+pygrib\footnote{\url{https://jswhit.github.io/pygrib/}} is used to handle this file type.
+
+\begin{itemize}
+    \item The \textbf{temperature} values are in Kelvin and have to be converted into °C. Then stored in a .csv file
+    \item \textbf{Wind} values are given as a vectors with an U and an V value. Both values are in separate lines in the GRIB file because they are basically two datasets fetched at once. So here the length of and angle of the vector have to be calculated which gives wind speed and direction. And also stored in once .csv file.
+\end{itemize}
+
+
+\section{Interactive visualization} \label{interactive visualization}
+
+The implementation of the interactive user interface, done in Python, was again an iterative process. Here are only the most recent and important facts stated.
+
+The \textbf{framework} of choice is Plotly + Dash\footnote{\url{https://dash.plotly.com/}}.
+This is because of the high adaptable behavior trough a good low level code implementation. Dash gives a point-and-click web interface.
+The visualization of the first data shows, Plotly express is to restricted in the function and the low level version of graph objects is better suitable.
+\vspace{0.2cm}
+
+\textbf{Idea:} As the reference, glacier data are always visible on the map and line plots. The user select the data point of interest on the map and the corresponding time-frame on the sliders an check boxes on the bottom of the interface.
+
+\textbf{Structure of the web interface:}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.4\textwidth]{ui_sketch_1.png}
+    \caption{This is an example of an SVG image.}
+\end{figure}
+This is done by 3 subplots in one figure. The object type of the map is a \textit{scattergeo} and \textit{scatter} for the line plots. Each as independent functions, so they can be called according to the selected variable.
+
+So the user can visually observe the progression of the glacier ice mass related to the selected weather variable and time frame. If there is a meaningful corelation, this variable might be a good candidate for a future machine learning project.
+
+\section{State of the project and outlook} \label{state of the project}
+
+The user interface at the current state can be seen as a starting point for a more advanced project.
+
+Plotly, especially \textit{scattergeo}, can not handle the high amount of data points when working with datasets like ERA5. Also the approach with subplots in plotly is to restrictive to be used with various weather data. For the further development of the project, a new framework is needed and a more advanced handling of the data itself, like in a proper database.
+\vspace{0.2cm}
+Link to the GitHub project: \\
+\url{https://github.com/viehbo/Thesis_Project_Glacier.git}
+
+
+\section{Use of generative AI and web search}
+
+The main resource was the manual of plotly and the provided example code. \\
+ChatGPT was mainly used to customize arrows in the scatter objects. But this was ultimately a dead end. Wherever parts of the code or the idea from ChatGPT is used, it is stated as comments in the code.
+Other sources for from some web searches are:
+stackoverflow\footnote{\url{https://stackoverflow.com/questions}}
+, geeksforgeeks\footnote{\url{https://www.geeksforgeeks.org/python-plotly-tutorial/}}
+
+
+
+
+\section{Acknowledgment} \label{acknowledgment}
+
+{\normalfont The results contain modified Copernicus Climate Change Service information 2020. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains.}
+
+
+
+\printbibliography
+
+
+
+
+
+
+\end{document}

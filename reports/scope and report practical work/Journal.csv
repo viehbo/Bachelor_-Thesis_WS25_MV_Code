@@ -1,0 +1,25 @@
+date,hours,description
+19.09.2024,5,write down the scope for "Practical Work in AI"
+24.09.2024,0.45,meeting
+30.09.2024,6,glacier data research and read "Gletscherbericht-2022_2023-_-Bergauf-02-2024"
+01.10.2024,2,exploring the data from wgms
+
+
+02.11.2024,3, working on change.csv data. a lot measurements but sometimes multiple ones with one time stamp
+
+17.11.2024,4, visualizing glacier data with plotly express
+16.11.2024,2, try to overly glacier data with weather data, without success
+17.11.2024,4, try again to overlay the visualizations failed and start a new approach with first a proper data-preprocessing
+23.11.2024,3, preprocess a new downloaded weather dataset. 1 datapoint a day from 1960 and visualize them on a map
+25.11.2024,4, write dedicated functions for preprocessing
+30.11.2024,1, start writing the report
+01.12.2024,2, start using dash instead of pure plotly
+02.12.2024,2, cleanup and working on the visualization with dash
+02.12.2024,3, cleanup and working on the visualization, biweekly meeting
+06.12.2024,4, add glacier data to the plot
+13.12.2024,3, click event - add dynamic text - refactoring
+10.01.2025,1, fetching wind data 1980-2025
+11.01.2025,6, plotting wind data, add user interaction, code refactoring and modularization
+14.01.2025,1, meeting
+20.01.2025,4, code refactoring and modularization
+21.01.2025,7, fixing some bugs - working on the implementation of line plots

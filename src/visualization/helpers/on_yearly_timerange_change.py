@@ -1,0 +1,100 @@
+from datetime import datetime as _dt
+import numpy as _np
+import pandas as _pd
+
+_DUMMY_START = _dt(2000, 1, 1)
+_DUMMY_END   = _dt(2000, 12, 31, 23, 59, 59)
+
+
+def _on_yearly_timerange_change(
+    w_yearly_mode,
+    _last,
+    _year_fields,
+    w_yearly_timerange,
+    w_alpha_value,
+    set_yearly_overlays,
+    ts_fig,
+    ts_fig_dir,
+    ts_year_sources,
+    ts_year_renderers,
+    ts_year_fit_sources,
+    ts_year_fit_renderers,
+    ts_dir_year_sources,
+    ts_dir_year_renderers,
+    ts_dir_year_fit_sources,
+    ts_dir_year_fit_renderers,
+    w_fit_degree,
+):
+    """
+    Recompute yearly overlays when the yearly timeframe slider changes,
+    using the last picked series cached in `_last`.
+    """
+
+    # Only meaningful in yearly mode and if something is picked
+    if not w_yearly_mode.value:
+        return
+
+    s = _last.get("picked_series")
+    kind = _last.get("picked_kind")
+    units = _last.get("picked_units", "")
+    if s is None or kind not in ("scalar", "uv"):
+        return
+
+    years_selected = [w.value for w in _year_fields]
+    yearly_window = w_yearly_timerange.value
+    if not (yearly_window and all(yearly_window)):
+        return
+
+    alpha = float(w_alpha_value.value or 0.35)
+
+    # --- Main overlays ---
+    set_yearly_overlays(
+        ts_fig,
+        s,
+        kind=kind,
+        years=years_selected,
+        yearly_sources=ts_year_sources,
+        yearly_renderers=ts_year_renderers,
+        yearly_fit_sources=ts_year_fit_sources,
+        yearly_fit_renderers=ts_year_fit_renderers,
+        fit_degree=int(w_fit_degree.value),
+        alpha=alpha,
+        units=units,
+        title_prefix="Yearly overlays",
+        dummy_range=yearly_window,
+    )
+
+    # --- Direction overlays for UV ---
+    if kind == "uv" and ts_fig_dir is not None:
+        dir_deg = (270.0 - _np.degrees(_np.arctan2(
+            s["v"].to_numpy(), s["u"].to_numpy()
+        ))) % 360.0
+        dir_series = _pd.Series(dir_deg, index=s.index, name="dir")
+
+        set_yearly_overlays(
+            ts_fig_dir,
+            dir_series,
+            kind="scalar",
+            years=years_selected,
+            yearly_sources=ts_dir_year_sources,
+            yearly_renderers=ts_dir_year_renderers,
+            yearly_fit_sources=ts_dir_year_fit_sources,
+            yearly_fit_renderers=ts_dir_year_fit_renderers,
+            fit_degree=int(w_fit_degree.value),
+            alpha=alpha,
+            units="°",
+            title_prefix="Yearly (direction)",
+            dummy_range=yearly_window,
+        )
+
+    # Keep x-ranges locked to dummy year
+    try:
+        ts_fig.x_range.start = _DUMMY_START
+        ts_fig.x_range.end = _DUMMY_END
+        if ts_fig_dir is not None:
+            ts_fig_dir.x_range.start = _DUMMY_START
+            ts_fig_dir.x_range.end = _DUMMY_END
+            ts_fig_dir.y_range.start = 0
+            ts_fig_dir.y_range.end = 360
+    except Exception:
+        pass
