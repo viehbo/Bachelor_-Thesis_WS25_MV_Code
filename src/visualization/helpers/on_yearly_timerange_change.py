@@ -9,7 +9,7 @@ _DUMMY_END   = _dt(2000, 12, 31, 23, 59, 59)
 def _on_yearly_timerange_change(
     w_yearly_mode,
     _last,
-    _year_fields,
+    w_years,
     w_yearly_timerange,
     w_alpha_value,
     set_yearly_overlays,
@@ -40,7 +40,7 @@ def _on_yearly_timerange_change(
     if s is None or kind not in ("scalar", "uv"):
         return
 
-    years_selected = [w.value for w in _year_fields]
+    years_selected = [w.value for w in w_years]
     yearly_window = w_yearly_timerange.value
     if not (yearly_window and all(yearly_window)):
         return

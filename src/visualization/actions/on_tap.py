@@ -103,7 +103,14 @@ def _on_tap(
                 return
 
             # Build selected years
-            years_selected = [w.value for w in (year_fields or [])]
+            # - if `year_fields` is a MultiChoice: use its .value (list)
+            # - if it's still a list of Selects: fall back to old behavior
+            if hasattr(year_fields, "value"):
+                # Panel MultiChoice: value is already a (possibly empty) list
+                years_selected = list(year_fields.value or [])
+            else:
+                # Legacy: list of individual widgets
+                years_selected = [w.value for w in (year_fields or [])]
 
             # Main plot overlays
             set_yearly_overlays(

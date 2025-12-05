@@ -3,8 +3,9 @@ import pandas as pd
 from datetime import datetime
 from src.visualization.helpers.populate_year_options_from_timerange import populate_year_options_from_timerange
 
+
 def toggle_yearly_visibility(w_yearly_mode,
-                             _year_fields,
+                             w_years,
                              w_set_alpha,
                              w_alpha_value,
                              w_timerange,
@@ -17,6 +18,7 @@ def toggle_yearly_visibility(w_yearly_mode,
                              w_yearly_timerange,
                              ):
 
+
     DUMMY_START = datetime(2000, 1, 1)
     DUMMY_END = datetime(2000, 12, 31, 23, 59, 59)
     print("FRITZ: ", DUMMY_START, DUMMY_END)
@@ -24,12 +26,18 @@ def toggle_yearly_visibility(w_yearly_mode,
     # Show timeframe slider only when NOT in yearly mode
     w_timerange.visible = not vis
 
-    for field in _year_fields:
-        field.visible = vis
-    #w_set_alpha.visible = vis
-    #w_alpha_value.visible = vis
-    if vis and (_year_fields[0].options == []):
-        populate_year_options_from_timerange(w_timerange, _year_fields)
+    # Show/hide the MultiChoice for years
+    w_years.visible = vis
+
+    # Optionally show alpha controls only in yearly mode
+    # w_set_alpha.visible = vis
+    # w_alpha_value.visible = vis
+
+    # If we just turned yearly mode on and no options set yet,
+    # populate the available years from the main timerange
+    if vis and (not w_years.options):
+        populate_year_options_from_timerange(w_timerange, w_years)
+
 
 
 

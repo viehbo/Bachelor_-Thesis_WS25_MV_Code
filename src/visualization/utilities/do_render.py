@@ -32,7 +32,7 @@ def do_render(w_timerange,
               ts_pane_dir=None,
               # --- NEW: yearly mode plumbing
               w_yearly_mode=None,
-              _year_fields=None,
+              w_years=None,
               w_yearly_timerange=None,
               w_alpha_value=None,
               ts_year_sources=None,
@@ -109,7 +109,7 @@ def do_render(w_timerange,
             ts_fig_dir,  # direction fig (for y-label/title updates)
             # --- yearly wiring (added) ---
             yearly_enabled_widget = w_yearly_mode,
-            year_fields = _year_fields,
+            year_fields=w_years,
             alpha_widget = w_alpha_value,
             yearly_window_widget=w_yearly_timerange,
             ts_year_sources = ts_year_sources,

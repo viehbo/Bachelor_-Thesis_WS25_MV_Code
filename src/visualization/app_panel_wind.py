@@ -73,28 +73,17 @@ w_fit_degree = pn.widgets.IntInput(name="Poly degree", value=3, start=1, end=10)
 # --- Yearly mode UI ----------------------------------------------------------
 w_yearly_mode = pn.widgets.Checkbox(name="Yearly mode", value=False)
 
+# One widget for all selected years
+# https://docs.bokeh.org/en/latest/docs/reference/models/widgets/inputs.html#bokeh.models.MultiChoice
+w_years = pn.widgets.MultiChoice(
+    name="Years",
+    options=[],      # will be filled from timerange
+    value=[],        # selected years
+    solid=True,
+    width=300,
+)
+w_years.visible = False  # only when yearly mode is ON
 
-# 10 dropdowns for years; options will be (lazily) set after first click
-def _year_select(name):
-    return pn.widgets.Select(name=name, options=[], value=None, width=110)
-
-w_year_1  = _year_select("Year 1")
-w_year_2  = _year_select("Year 2")
-w_year_3  = _year_select("Year 3")
-w_year_4  = _year_select("Year 4")
-w_year_5  = _year_select("Year 5")
-w_year_6  = _year_select("Year 6")
-w_year_7  = _year_select("Year 7")
-w_year_8  = _year_select("Year 8")
-w_year_9  = _year_select("Year 9")
-w_year_10 = _year_select("Year 10")
-
-_year_fields = [w_year_1, w_year_2, w_year_3, w_year_4, w_year_5,
-                w_year_6, w_year_7, w_year_8, w_year_9, w_year_10]
-
-# start hidden
-for _w in _year_fields:
-    _w.visible = False
 
 # Alpha controls (affects raw/yearly lines only; fit stays unchanged)
 w_alpha_value = pn.widgets.FloatInput(name="Line alpha (0..1)", value=0.35, step=0.05, start=0.0, end=1.0, width=150)
@@ -204,7 +193,7 @@ w_yearly_timerange.param.watch(
     lambda e: _on_yearly_timerange_change(
         w_yearly_mode=w_yearly_mode,
         _last=_last,
-        _year_fields=_year_fields,
+        w_years=w_years,
         w_yearly_timerange=w_yearly_timerange,
         w_alpha_value=w_alpha_value,
         set_yearly_overlays=set_yearly_overlays,
@@ -236,7 +225,7 @@ ts_pane_dir.visible = False  # shown only for kind="uv"
 
 
 w_yearly_mode.param.watch(lambda e: toggle_yearly_visibility(w_yearly_mode=w_yearly_mode,
-                                                             _year_fields=_year_fields,
+                                                             w_years=w_years,
                                                              w_set_alpha=w_set_alpha,
                                                              w_alpha_value=w_alpha_value,
                                                              w_timerange=w_timerange,
@@ -298,7 +287,7 @@ w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       ts_source_dir_fit=ts_source_dir_fit,
                                       ts_pane_dir=ts_pane_dir,
                                       w_yearly_mode=w_yearly_mode,
-                                      _year_fields=_year_fields,
+                                      w_years=w_years,
                                       w_alpha_value=w_alpha_value,
                                       ts_year_sources=ts_year_sources,
                                       ts_year_renderers=ts_year_renderers,
@@ -327,7 +316,7 @@ w_set_alpha.on_click(lambda e: apply_alpha_to_raw_lines(w_alpha_value=w_alpha_va
                                                         ts_source_dir=ts_source_dir,
                                                         ts_dir_year_renderers=ts_dir_year_renderers, ))
 # Recompute year options whenever the time range changes
-w_timerange.param.watch(lambda e: populate_year_options_from_timerange(w_timerange, _year_fields), "value")
+w_timerange.param.watch(lambda e: populate_year_options_from_timerange(w_timerange, w_years), "value")
 
 # call dataset change
 on_dataset_change()
@@ -364,9 +353,7 @@ controls = pn.Column(
     w_yearly_timerange,
     #pn.Row(w_year_1, w_year_2, w_year_3, w_year_4, w_year_5),
     #pn.Row(w_year_6, w_year_7, w_year_8, w_year_9, w_year_10),
-    pn.Row(w_year_1, w_year_2, w_year_3),
-    pn.Row(w_year_4, w_year_5, w_year_6),
-    pn.Row(w_year_7, w_year_8, w_year_9),
+    w_years,
 
     pn.Row(w_render),
     w_status,
