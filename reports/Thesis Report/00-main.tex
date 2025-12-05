@@ -1,0 +1,96 @@
+% View link: https://www.overleaf.com/read/wygtrfbdkpxw#8c9d5a
+
+\documentclass{jku-icg-thesis}
+
+% recommended packages
+\usepackage{booktabs}
+\usepackage{csquotes}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+% we recommend using biblatex for references
+\usepackage[
+    style=numeric,
+    backend=biber, 
+    ]{biblatex}
+
+% only for blindtext (can be removed)
+\usepackage{kantlipsum}
+
+% define the title and author as usual
+% the class adds a macro for the immatriculation number
+\title{A Template for JKU ICG Theses With a Title That Spans Multiple Lines}
+\subtitle{And a Short Subtitle}
+\author{First Author}
+
+\date{\today}
+
+% add up to two supervisors
+%    you can specify special roles like this:
+%       \supervisor[Erstbetreuer]{First Supervisor}
+%       \supervisor[Zweitbetreuer]{Second Supervisor}
+\supervisor{First Supervisor}
+
+% provide some information on the thesis
+\thesissetup{
+    subject = ai,       % 'ai' or 'cs'
+    study = bsc,        % 'bsc' or 'msc'
+    location = Linz,
+}
+
+\addbibresource{references.bib}
+
+%%% Copy- and searchable PDF
+
+\input glyphtounicode
+\pdfgentounicode=1
+
+%%% Document
+
+\begin{document}
+
+\maketitle
+	
+\pagenumbering{roman}
+
+%% Intruduction: explain the problem, data, ...
+%% optional section with background info 
+%% section: related work, projects from wgms, timeseries visu, gesospatial 
+%% Problem characterisation ... data and tasks ... datastructures and insights
+%%    what makes the data important? user tasks? 
+%% solution? How does it work? naming section by tool or result ??
+%%      its about to explain the task and why, not explicit how to work with it
+%%      Section or Subsection abour implementation
+%% section about evaluation or proove by use case 
+%% future work, limitations... 
+%% conclusion (compact)
+%% 15 - 20 pages (main matter)
+%% appendix
+
+\include{frontmatter/quote}
+\include{frontmatter/affidavit}
+\include{frontmatter/abstract-en}
+\include{frontmatter/abstract-de}
+\include{frontmatter/acknowledgments}
+\ClearPage
+
+\pdfbookmark[1]{Contents}{sec:toc}
+\tableofcontents
+\listoffigures
+\listoftables
+%\listofequations
+\ClearPage
+
+\setcounter{page}{1}
+\pagenumbering{arabic}
+
+\include{01-introduction}
+\include{02-related_work}
+
+\printbibliography[title = {References}, heading = bibintoc]
+
+\begin{icgAppendix}
+  \include{ax-appendix}
+\end{icgAppendix}
+
+\end{document}
