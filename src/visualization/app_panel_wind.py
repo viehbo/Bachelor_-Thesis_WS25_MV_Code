@@ -66,7 +66,7 @@ w_loadtime = pn.widgets.Button(name="Load files and timerange")
 w_stat_mean = pn.pane.Markdown("**Mean:** –", height=30)
 w_stat_max  = pn.pane.Markdown("**Max:** –",  height=30)
 w_stat_min  = pn.pane.Markdown("**Min:** –",  height=30)
-
+w_stat_ndatapoints = pn.pane.Markdown("**Number of datapoints in the range:** -", height=30)
 w_fit_degree = pn.widgets.IntInput(name="Poly degree", value=3, start=1, end=10)
 
 
@@ -298,6 +298,7 @@ w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       ts_dir_year_fit_sources=ts_dir_year_fit_sources,
                                       ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
                                       ts_glacier_source=ts_glacier_source,
+                                      w_stat_ndatapoints=w_stat_ndatapoints,
                                       ))
 
 # wire the button
@@ -358,6 +359,7 @@ controls = pn.Column(
     pn.Row(w_render),
     w_status,
     pn.Row(w_stat_mean, w_stat_max, w_stat_min),
+    w_stat_ndatapoints,
     w_sampletext,
     w_citetext,
 

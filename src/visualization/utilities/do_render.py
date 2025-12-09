@@ -21,6 +21,7 @@ def do_render(w_timerange,
               w_stat_mean,
               w_stat_max,
               w_stat_min,
+              w_stat_ndatapoints,
               plot_pane,
               ts_fig,
               ts_source,
@@ -107,6 +108,7 @@ def do_render(w_timerange,
             ts_source_dir,  # direction raw
             ts_source_dir_fit,  # direction fit
             ts_fig_dir,  # direction fig (for y-label/title updates)
+            w_stat_ndatapoints=w_stat_ndatapoints,
             # --- yearly wiring (added) ---
             yearly_enabled_widget = w_yearly_mode,
             year_fields=w_years,

@@ -204,9 +204,15 @@ def set_yearly_overlays(
         src.data = dict(t=t_norm_list, y=y_list)
 
         color = color_map.get(yint, PALETTE10[i % len(PALETTE10)])
+        # raw yearly line (normalised to dummy year)
+        src.data = dict(t=t_norm_list, y=y_list)
+
+        color = color_map.get(yint, PALETTE10[i % len(PALETTE10)])
+        label = str(yint)  # one legend entry per year
+
         rnd.glyph.line_color = color
         try:
-            rnd.legend_label = str(yint)
+            rnd.legend_label = label
         except Exception:
             pass
         rnd.visible = True
@@ -232,12 +238,14 @@ def set_yearly_overlays(
 
             fit_rnd.glyph.line_color = color
             try:
-                fit_rnd.legend_label = f"Poly {yint}"
+                # SAME label as raw line → grouped legend entry
+                fit_rnd.legend_label = label
             except Exception:
                 pass
             fit_rnd.visible = True
             fit_rnd.glyph.line_alpha = 0.25
             fit_rnd.glyph.line_dash = "solid"
+
         else:
             # not enough points for the requested degree
             fit_src.data = dict(t=[], y=[])
@@ -263,3 +271,14 @@ def set_yearly_overlays(
             )
         )
         fig.title.text = f"{title_prefix} overlays ({selected_count} selected)"
+
+    # Legend cosmetics: only the raw yearly lines have legend_label;
+    # make legend clickable to hide/show years.
+    try:
+        if fig.legend:
+            for lg in fig.legend:
+                lg.click_policy = "hide"
+                lg.location = "top_left"
+    except Exception:
+        pass
+

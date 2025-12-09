@@ -54,18 +54,27 @@ def toggle_yearly_visibility(w_yearly_mode,
         pass
 
 
-    # --- Hide/show main lines depending on mode ---
+
     try:
         for r in ts_fig.renderers:
             ds = getattr(r, "data_source", None)
+            y_range_name = getattr(r, "y_range_name", None)
+
+            # main series & its fit
             if ds is ts_source or ds is ts_source_fit:
                 r.visible = not vis  # hide in yearly mode, show otherwise
+
+            # NEW: glacier line (secondary axis) – hide in yearly mode
+            if y_range_name == "glacier":
+                r.visible = not vis
+
         for r in ts_fig_dir.renderers:
             ds = getattr(r, "data_source", None)
             if ds is ts_source_dir or ds is ts_source_dir_fit:
                 r.visible = not vis
     except Exception:
         pass
+
 
     # --- Adjust x-range ---
     try:

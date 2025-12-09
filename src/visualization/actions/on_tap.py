@@ -55,6 +55,7 @@ def _on_tap(
     ts_year_renderers=None,
     ts_dir_year_sources=None,
     ts_dir_year_renderers=None,
+    w_stat_ndatapoints=None,
     # Yearly FIT overlays (main & direction)
     ts_year_fit_sources=None,
     ts_year_fit_renderers=None,
@@ -138,6 +139,7 @@ def _on_tap(
                                                       base_series_or_df["u"].to_numpy()))
                     ) % 360.0
                     dir_series = pd.Series(dir_deg, index=base_series_or_df.index, name="dir")
+                    print("FRITZ dir_series: ", dir_series.shape)
                     set_yearly_overlays(
                         ts_fig_dir,
                         dir_series,
@@ -212,6 +214,20 @@ def _on_tap(
 
             # 1) Glacier time series (always kept on secondary axis)
             s = glacier_series_by_name(GLACIERS["dir"], str(name_used))
+
+            # --- Normalize glacier data to range 0–10 ---
+            arr = s.values.astype(float)
+            vmin = float(np.nanmin(arr))
+            vmax = float(np.nanmax(arr))
+
+            if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
+                s_norm = (arr - vmin) / (vmax - vmin) * 10.0
+            else:
+                # Degenerate case: glacier is constant → flat line at 5
+                s_norm = np.full_like(arr, 5.0)
+
+            # Replace the time series with normalized values
+            s = pd.Series(s_norm, index=s.index, name=s.name)
 
             # Show glacier stats in the side panes
             _show_stats(s.values, "mm w.e.", _stat_panes)
@@ -295,9 +311,11 @@ def _on_tap(
                     mask = (idx.time >= hs) & (idx.time <= he)
                     ts = ts.loc[mask]
 
+                print("FRITZ 1 size of the plotted data: ", ts.shape)
                 # Now behave like the normal grid branch for the primary axis,
                 # but keep glacier stats on the side.
                 if meta["kind"] == "scalar":
+                    print("FRITZ scalar size of the plotted data: ", ts.shape)
                     set_timeseries(
                         ts_source,
                         ts,
@@ -447,8 +465,19 @@ def _on_tap(
             # ts is a Series for scalar, DataFrame for uv; boolean mask works for both
             ts = ts.loc[mask]
 
+            num_pts = ts.shape[0]
+            if w_stat_ndatapoints is not None:
+                w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {num_pts}"
+
 
         if meta["kind"] == "scalar":
+            #print("FRITZ_11 ts type: ", type(ts))
+            #print("FRITZ_12 ts: ", ts.shape[0])
+            # Number of datapoints
+            #num_pts = ts.shape[0]
+            #if w_stat_ndatapoints is not None:
+            #    w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {num_pts}"
+
             _show_stats(ts.values, meta.get("units", ""), _stat_panes)
             set_timeseries(
                 ts_source,
