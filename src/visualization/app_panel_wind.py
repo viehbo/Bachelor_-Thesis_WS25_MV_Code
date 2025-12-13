@@ -349,7 +349,7 @@ controls = pn.Column(
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
 
-    # --- Yearly UI block
+    # Yearly UI block
     pn.Row(w_yearly_mode),
     w_yearly_timerange,
     #pn.Row(w_year_1, w_year_2, w_year_3, w_year_4, w_year_5),
@@ -382,7 +382,7 @@ top_section_controls = pn.Column(
 )
 
 
-# --- RIGHT PLOT COLUMN (~3/4 width) ---
+# RIGHT PLOT COLUMN
 plots = pn.Column(
     plot_pane,
     ts_pane,
@@ -392,14 +392,14 @@ plots = pn.Column(
 )
 
 
-# --- TOP: FULL-WIDTH TIME SLIDER ---
+# TOP
 top_slider = pn.Row(
     w_timerange,
     sizing_mode="stretch_width"
 )
 
 
-# --- PAGE LAYOUT (top slider + left controls + right plots) ---
+# PAGE LAYOUT
 template = pn.template.MaterialTemplate(
     title="Glacier Project",
     header_background="#014f86"
