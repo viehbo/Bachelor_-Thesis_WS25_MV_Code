@@ -248,13 +248,12 @@ def _update_yearly_overlays(
 # Glacier helpers
 # ----------------------------------------------------------------------------- #
 
-def _normalize_glacier_series_for_secondary_axis(s: pd.Series) -> pd.Series:
-    """Normalize glacier series to 0..10 for a secondary axis line."""
+def _normalize_glacier_series_for_secondary_axis(s: pd.Series, multiplier=10, offset=0) -> pd.Series:
     arr = s.values.astype(float)
     vmin = float(np.nanmin(arr))
     vmax = float(np.nanmax(arr))
     if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
-        s_norm = (arr - vmin) / (vmax - vmin) * 10.0
+        s_norm = (arr - vmin) / (vmax - vmin) * multiplier + offset
     else:
         s_norm = np.full_like(arr, 5.0)
     return pd.Series(s_norm, index=s.index, name=s.name)
@@ -481,7 +480,7 @@ def _on_tap(
 
             # Glacier series (always 'scalar'); normalize for the secondary axis
             s_glacier = glacier_series_by_name(GLACIERS["dir"], str(name_used))
-            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier)
+            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=multiplier, offset=offset)
             # Push to secondary axis (if wired)
             _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 

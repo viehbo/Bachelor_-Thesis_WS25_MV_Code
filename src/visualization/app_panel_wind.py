@@ -1,6 +1,8 @@
 import xarray as xr
 import panel as pn
-from src.visualization.helpers.scan_files import scan_files
+#from src.visualization.helpers.scan_files import scan_files
+from src.visualization.helpers.pick_netcdf_files import pick_netcdf_files
+
 from src.visualization.helpers.load_time_range import load_time_range
 
 from src.visualization.plots.make_lineplot import make_line_plot_1
@@ -57,9 +59,12 @@ DatetimeRangeSlider._property_conversion = staticmethod(safe_value_as_datetime)
 w_dataset = pn.widgets.RadioButtonGroup(
     name="Dataset", options=list(DATASETS.keys()), button_type="primary")
 
-w_data_dir = pn.widgets.TextInput(name="Data folder", value=str(DATASETS[w_dataset.value]["dir"]))
-w_pattern  = pn.widgets.TextInput(name="Filename pattern", value=DATASETS[w_dataset.value]["pattern"])
-w_scan     = pn.widgets.Button(name="Scan", button_type="primary")
+#w_data_dir = pn.widgets.TextInput(name="Data folder", value=str(DATASETS[w_dataset.value]["dir"]))
+#w_pattern  = pn.widgets.TextInput(name="Filename pattern", value=DATASETS[w_dataset.value]["pattern"])
+#w_scan     = pn.widgets.Button(name="Scan", button_type="primary")
+w_pick_files = pn.widgets.Button(name="Select .nc files (OS)", button_type="primary")
+w_clear_files = pn.widgets.Button(name="Clear selection", button_type="light")
+
 w_files    = pn.widgets.MultiSelect(name="NetCDF files", options=[], size=12)
 w_loadtime = pn.widgets.Button(name="Load files and timerange")
 # text fields for the click event
@@ -237,27 +242,56 @@ w_yearly_mode.param.watch(lambda e: toggle_yearly_visibility(w_yearly_mode=w_yea
                                                              ), "value")
 
 
-def on_dataset_change(event=None):
-    cfg = DATASETS[w_dataset.value]
-    # Update folder and pattern from DATASETS config
-    w_data_dir.value = str(cfg["dir"])
-    w_pattern.value  = cfg["pattern"]
 
-    # Reset timeframe slider to placeholder + disable
+def on_pick_files(event=None):
+    # Use the dataset dir as a helpful starting folder
+    cfg = DATASETS[w_dataset.value]
+    initial_dir = str(cfg["dir"])
+
+    try:
+        paths = pick_netcdf_files(initial_dir=initial_dir)
+    except Exception as e:
+        w_status.object = f"File picker failed: {e}"
+        return
+
+    if not paths:
+        w_status.object = "No files selected."
+        return
+
+    # Populate MultiSelect
+    w_files.options = paths
+    w_files.value = list(paths)
+
+    w_status.object = (
+        f"Selected {len(paths)} file(s). Click **Load files and timerange** → **Render**."
+    )
+
+
+w_pick_files.on_click(on_pick_files)
+
+def on_clear_files(event=None):
+    w_files.options = []
+    w_files.value = []
+    w_status.object = "Cleared file selection."
+
+w_clear_files.on_click(on_clear_files)
+
+
+def on_dataset_change(event=None):
+    # reset timeframe slider to placeholder + disable (keep your existing logic)
     w_timerange.start = _placeholder_start
     w_timerange.end = _placeholder_end
     w_timerange.value = (_placeholder_start, _placeholder_end)
     w_timerange.disabled = True
-    # only show when NOT in yearly mode
     w_timerange.visible = not bool(w_yearly_mode.value)
 
-    # Automatically scan all files in the folder/pattern
-    scan_files(w_data_dir, w_pattern, w_files, w_status)
+    # Clear current file selection; dataset changed
+    w_files.options = []
+    w_files.value = []
 
-    # Optionally auto-select all found files
-    if w_files.options:
-        # options are plain strings (paths), so this is safe
-        w_files.value = list(w_files.options)
+    cfg = DATASETS[w_dataset.value]
+    w_status.object = f"Dataset set to '{w_dataset.value}'. Click **Select .nc files (OS)** to choose files."
+
 
 
 w_dataset.param.watch(lambda e: on_dataset_change(), 'value')
@@ -335,50 +369,28 @@ _last = {
 
 # left control column ~1/4 width
 controls = pn.Column(
-    #pn.Row(w_dataset),
-    #pn.Row(w_data_dir, w_pattern),
-    #pn.Row(w_loadtime),
-
-    #pn.Row(
-    #    w_timerange,
-    #    sizing_mode="stretch_width"),
-
-    # w_timerange,
-
+    pn.Row(w_files),
     pn.Row(w_hours),
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
-
-    # Yearly UI block
     pn.Row(w_yearly_mode),
     w_yearly_timerange,
-    #pn.Row(w_year_1, w_year_2, w_year_3, w_year_4, w_year_5),
-    #pn.Row(w_year_6, w_year_7, w_year_8, w_year_9, w_year_10),
     w_years,
-
     pn.Row(w_render),
     w_status,
     pn.Row(w_stat_mean, w_stat_max, w_stat_min),
     w_stat_ndatapoints,
     w_sampletext,
     w_citetext,
-
-    width=420,                   # << keeps controls ≤ 1/4 screen
+    width=420,
     sizing_mode="stretch_height"
 )
 
+
 top_section_controls = pn.Column(
     pn.Row(w_dataset),
-    pn.Row(w_data_dir, w_pattern, w_loadtime),
-    #pn.Row(w_loadtime),
-
-    width=420,  # << keeps controls ≤ 1/4 screen
-    #sizing_mode="stretch_height",
-
-    #pn.Row(
-    #    w_timerange,
-    #    sizing_mode="stretch_width"),
-
+    pn.Row(w_pick_files, w_clear_files, w_loadtime),
+    width=420,
 )
 
 
