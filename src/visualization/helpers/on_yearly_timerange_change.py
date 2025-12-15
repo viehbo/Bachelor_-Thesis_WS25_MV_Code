@@ -1,12 +1,10 @@
-import numpy as _np
-import pandas as _pd
-
 from src.visualization.helpers.yearly_mode import (
     DUMMY_START,
     DUMMY_END,
     get_selected_years,
     get_dummy_year_window,
 )
+from src.visualization.helpers.wind_direction import compute_wind_direction_deg_from_uv
 
 
 def _on_yearly_timerange_change(
@@ -32,8 +30,6 @@ def _on_yearly_timerange_change(
     Recompute yearly overlays when the yearly timeframe slider changes,
     using the last picked series cached in `_last`.
     """
-
-    # Only meaningful in yearly mode and if something is picked
     if not w_yearly_mode.value:
         return
 
@@ -43,7 +39,6 @@ def _on_yearly_timerange_change(
     if s is None or kind not in ("scalar", "uv"):
         return
 
-    # IMPORTANT: w_years is a MultiChoice in your app; use .value (via helper)
     years_selected = get_selected_years(w_years)
 
     yearly_window = get_dummy_year_window(w_yearly_timerange)
@@ -72,10 +67,7 @@ def _on_yearly_timerange_change(
 
     # --- Direction overlays for UV ---
     if kind == "uv" and ts_fig_dir is not None:
-        dir_deg = (270.0 - _np.degrees(_np.arctan2(
-            s["v"].to_numpy(), s["u"].to_numpy()
-        ))) % 360.0
-        dir_series = _pd.Series(dir_deg, index=s.index, name="dir")
+        dir_series = compute_wind_direction_deg_from_uv(s)
 
         set_yearly_overlays(
             ts_fig_dir,

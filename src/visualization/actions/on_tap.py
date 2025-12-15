@@ -18,6 +18,7 @@ from src.visualization.helpers.glacier_secondary_axis import (
     normalize_glacier_series_for_secondary_axis,
     update_glacier_secondary_axis,
 )
+from src.visualization.helpers.wind_direction import compute_wind_direction_deg_from_uv
 
 
 # ----------------------------------------------------------------------------- #
@@ -105,9 +106,7 @@ def _polyfit_series_to_source(
 
 def _compute_direction_series(uv_df: pd.DataFrame) -> pd.Series:
     """Return wind direction (from) in degrees [0, 360) from a UV dataframe."""
-    # dir = 270 - arctan2(v, u) in degrees, modulo 360
-    dir_deg = (270.0 - np.degrees(np.arctan2(uv_df["v"].to_numpy(), uv_df["u"].to_numpy()))) % 360.0
-    return pd.Series(dir_deg, index=uv_df.index, name="dir")
+    return compute_wind_direction_deg_from_uv(uv_df)
 
 
 def _current_dummy_range(yearly_window_widget) -> Optional[Tuple[_dt, _dt]]:
@@ -218,7 +217,6 @@ def _update_yearly_overlays(
                 dummy_range=dummy_range,
             )
         else:
-            # Optional: reuse scalar series on direction fig if desired
             set_yearly_overlays(
                 ts_fig_dir,
                 base_series_or_df,
@@ -246,11 +244,6 @@ def _update_yearly_overlays(
             ts_fig_dir.y_range.end = 360
     except Exception:
         pass
-
-
-# ----------------------------------------------------------------------------- #
-# Glacier helpers (moved to src/visualization/helpers/glacier_secondary_axis.py)
-# ----------------------------------------------------------------------------- #
 
 
 # ----------------------------------------------------------------------------- #
@@ -288,19 +281,15 @@ def _plot_scalar_branch(
     """Render scalar time series + fits + yearly overlays; return (series, kind)."""
     ts_f = _apply_hour_filter(ts, hours)
 
-    # push raw
     t_vals = list(pd.to_datetime(ts_f.index).to_pydatetime())
     y_vals = list(map(float, ts_f.values))
     ts_source.data = dict(t=t_vals, y=y_vals)
 
-    # stats
     _show_stats(ts_f.values, units, stat_panes)
 
-    # fit
     if ts_source_fit is not None:
         _polyfit_series_to_source(ts_f.index, ts_f.values, fit_degree, ts_source_fit)
 
-    # title / labels
     if ts_fig is not None:
         try:
             ts_fig.yaxis.axis_label = units
@@ -308,7 +297,6 @@ def _plot_scalar_branch(
         except Exception:
             pass
 
-    # yearly overlays
     _update_yearly_overlays(
         yearly_enabled_widget=yearly_enabled_widget,
         yearly_window_widget=yearly_window_widget,
@@ -367,19 +355,15 @@ def _plot_uv_branch(
     """Render UV wind: speed on main plot, direction on direction plot; return (df, kind)."""
     df = _apply_hour_filter(ts_uv, hours)
 
-    # speed
     speed = np.hypot(df["u"].to_numpy(), df["v"].to_numpy())
     t_vals = list(pd.to_datetime(df.index).to_pydatetime())
     ts_source.data = dict(t=t_vals, y=list(map(float, speed)))
 
-    # stats on speed
     _show_stats(speed, units, stat_panes)
 
-    # speed fit
     if ts_source_fit is not None:
         _polyfit_series_to_source(df.index, speed, fit_degree, ts_source_fit)
 
-    # direction series
     if ts_source_dir is not None:
         dir_series = _compute_direction_series(df)
         ts_source_dir.data = dict(
@@ -390,7 +374,6 @@ def _plot_uv_branch(
         if ts_source_dir_fit is not None:
             _polyfit_series_to_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
 
-    # labels
     if ts_fig is not None:
         try:
             ts_fig.yaxis.axis_label = units
@@ -404,7 +387,6 @@ def _plot_uv_branch(
         except Exception:
             pass
 
-    # yearly overlays
     _update_yearly_overlays(
         yearly_enabled_widget=yearly_enabled_widget,
         yearly_window_widget=yearly_window_widget,
@@ -471,25 +453,20 @@ def _on_tap(
         bkplot.on_event(Tap, lambda evt: _on_tap(.))
     """
     try:
-        # --- Click prelude: feedback + click location ---
         w_status.object = f"Tap at x={evt.x:.1f}, y={evt.y:.1f}"
         lon_click = float(x_to_lon(evt.x))
         lat_click = float(y_to_lat(evt.y))
 
-        # --- If near a glacier, handle that branch first ----------------------
         name_used = _nearest_glacier_name(_last.get("glaciers"), evt.x, evt.y)
         if name_used:
             from src.visualization.plots.glacier_overlay import glacier_series_by_name
 
-            # Glacier series (always 'scalar'); normalize for the secondary axis
             s_glacier = glacier_series_by_name(GLACIERS["dir"], str(name_used))
 
             mult = float(getattr(w_glacier_multiplier, "value", 10.0) or 10.0)
             off = float(getattr(w_glacier_offset, "value", 0.0) or 0.0)
 
             s_norm = normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=mult, offset=off)
-
-            # Push to secondary axis (if wired)
             update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
             if w_glacier_multiplier is not None:
@@ -499,8 +476,7 @@ def _on_tap(
 
             _last["selected_glacier_name"] = str(name_used)
             _last["glacier_series_raw"] = s_glacier
-            # Additionally try to load the grid series at the clicked point,
-            # so both can be seen together on primary axis.
+
             try:
                 ts_grid, meta_grid = _extract_timeseries_grid(
                     _last["files"],
@@ -512,7 +488,6 @@ def _on_tap(
             except Exception:
                 ts_grid, meta_grid = None, None
 
-            # Apply hours if we were able to extract a grid series
             if ts_grid is not None and meta_grid is not None and len(ts_grid) > 0:
                 hours = _last.get("hours")
                 if w_stat_ndatapoints is not None:
@@ -573,11 +548,9 @@ def _on_tap(
                 _last["picked_kind"] = kind_used
                 _last["picked_units"] = meta_grid.get("units", "" if kind_used == "scalar" else "m/s")
 
-            # Status
             w_status.object = f"Selected glacier: **{name_used}** ({lon_click:.3f}, {lat_click:.3f})"
             return
 
-        # --- Normal grid-click branch -----------------------------------------
         try:
             ts, meta = _extract_timeseries_grid(
                 _last["files"],
