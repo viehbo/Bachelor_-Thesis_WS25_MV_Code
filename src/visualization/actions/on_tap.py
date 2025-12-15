@@ -250,13 +250,22 @@ def _update_yearly_overlays(
 
 def _normalize_glacier_series_for_secondary_axis(s: pd.Series, multiplier=10, offset=0) -> pd.Series:
     arr = s.values.astype(float)
+
+    # Guard: empty or all-NaN -> return empty/NaN series (no warnings)
+    if arr.size == 0 or not np.isfinite(arr).any():
+        return pd.Series(np.full_like(arr, np.nan, dtype=float), index=s.index, name=s.name)
+
     vmin = float(np.nanmin(arr))
     vmax = float(np.nanmax(arr))
+
     if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
         s_norm = (arr - vmin) / (vmax - vmin) * multiplier + offset
     else:
-        s_norm = np.full_like(arr, 5.0)
+        # Degenerate case (constant series): still produce something finite
+        s_norm = np.full_like(arr, offset, dtype=float)
+
     return pd.Series(s_norm, index=s.index, name=s.name)
+
 
 
 def _update_glacier_secondary_axis(
@@ -277,14 +286,22 @@ def _update_glacier_secondary_axis(
 
     if y_vals:
         arr = np.asarray(y_vals, dtype=float)
+
+        # Guard: all-NaN -> do not autoscale; keep existing range
+        if not np.isfinite(arr).any():
+            return
+
         ymin = float(np.nanmin(arr))
         ymax = float(np.nanmax(arr))
+
         if not (np.isfinite(ymin) and np.isfinite(ymax)):
-            ymin, ymax = -1.0, 1.0
+            return
+
         pad = 0.05 * (ymax - ymin if ymax > ymin else (abs(ymax) or 1.0))
         rng = ts_fig.extra_y_ranges["glacier"]
         rng.start = ymin - pad
         rng.end = ymax + pad
+
 
 
 # ----------------------------------------------------------------------------- #
@@ -462,6 +479,8 @@ def _on_tap(
     ts_dir_year_fit_renderers=None,
     # Glacier overlay (secondary axis)
     ts_glacier_source=None,
+    w_glacier_multiplier=None,
+    w_glacier_offset=None,
 ):
     """
     External tap handler. Hook from app:
@@ -480,15 +499,32 @@ def _on_tap(
 
             # Glacier series (always 'scalar'); normalize for the secondary axis
             s_glacier = glacier_series_by_name(GLACIERS["dir"], str(name_used))
-            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=multiplier, offset=offset)
+
+            mult = float(getattr(w_glacier_multiplier, "value", 10.0) or 10.0)
+            off = float(getattr(w_glacier_offset, "value", 0.0) or 0.0)
+
+            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=mult, offset=off)
+
+            #s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=multiplier, offset=offset)
             # Push to secondary axis (if wired)
             _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
+            if w_glacier_multiplier is not None:
+                w_glacier_multiplier.visible = True
+            if w_glacier_offset is not None:
+                w_glacier_offset.visible = True
+
+            _last["selected_glacier_name"] = str(name_used)
+            _last["glacier_series_raw"] = s_glacier
             # Additionally try to load the grid series at the clicked point,
             # so both can be seen together on primary axis.
             try:
                 ts_grid, meta_grid = _extract_timeseries_grid(
-                    _last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click
+                    _last["files"],
+                    _last["ds_key"],
+                    _last["time_range"],
+                    lon_click,
+                    lat_click
                 )
             except Exception:
                 ts_grid, meta_grid = None, None
@@ -558,10 +594,19 @@ def _on_tap(
             w_status.object = f"Selected glacier: **{name_used}** ({lon_click:.3f}, {lat_click:.3f})"
             return
 
+
+
         # --- Normal grid branch ------------------------------------------------
         ts, meta = _extract_timeseries_grid(
             _last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click
         )
+
+        if w_glacier_multiplier is not None:
+            w_glacier_multiplier.visible = False
+        if w_glacier_offset is not None:
+            w_glacier_offset.visible = False
+        _last["glacier_series_raw"] = None
+        _last["selected_glacier_name"] = None
 
         hours = _last.get("hours")
         if w_stat_ndatapoints is not None:

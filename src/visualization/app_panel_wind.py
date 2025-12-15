@@ -136,6 +136,23 @@ w_hours = pn.widgets.MultiChoice(
     width=300,
 )
 
+w_glacier_multiplier = pn.widgets.FloatSlider(
+    name="Multiplier",
+    start=-10.0, end=10.0, value=10.0, step=0.1,
+    orientation="horizontal",
+    width=220,
+    visible=False,
+)
+
+w_glacier_offset = pn.widgets.FloatSlider(
+    name="Offset",
+    start=-20.0, end=20.0, value=0.0, step=0.1,
+    orientation="horizontal",
+    width=220,
+    visible=False,
+)
+
+
 
 
 
@@ -293,6 +310,27 @@ def on_dataset_change(event=None):
     w_status.object = f"Dataset set to '{w_dataset.value}'. Click **Select .nc files (OS)** to choose files."
 
 
+def _update_glacier_overlay_from_sliders(event=None):
+    s_raw = _last.get("glacier_series_raw")
+    if s_raw is None or len(s_raw) == 0:
+        return
+
+    # Reuse the same normalization + pushing logic as on_tap
+    from src.visualization.actions.on_tap import (
+        _normalize_glacier_series_for_secondary_axis,
+        _update_glacier_secondary_axis,
+    )
+
+    mult = float(w_glacier_multiplier.value)
+    off  = float(w_glacier_offset.value)
+
+    s_norm = _normalize_glacier_series_for_secondary_axis(s_raw, multiplier=mult, offset=off)
+    _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
+
+
+w_glacier_multiplier.param.watch(_update_glacier_overlay_from_sliders, "value")
+w_glacier_offset.param.watch(_update_glacier_overlay_from_sliders, "value")
+
 
 w_dataset.param.watch(lambda e: on_dataset_change(), 'value')
 #
@@ -323,6 +361,8 @@ w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       w_yearly_mode=w_yearly_mode,
                                       w_years=w_years,
                                       w_alpha_value=w_alpha_value,
+                                      w_glacier_multiplier=w_glacier_multiplier,
+                                      w_glacier_offset=w_glacier_offset,
                                       ts_year_sources=ts_year_sources,
                                       ts_year_renderers=ts_year_renderers,
                                       ts_dir_year_sources=ts_dir_year_sources,
@@ -367,7 +407,16 @@ _last = {
 }
 
 
-# left control column ~1/4 width
+
+glacier_slider_col = pn.Column(
+    w_glacier_multiplier,
+    w_glacier_offset,
+    width=110,
+    sizing_mode="fixed",
+    margin=(0, 0, 0, 10),
+)
+
+
 controls = pn.Column(
     pn.Row(w_files),
     pn.Row(w_hours),
@@ -393,15 +442,36 @@ top_section_controls = pn.Column(
     width=420,
 )
 
+glacier_slider_left = pn.Column(
+    "Glacier overlay",
+    w_glacier_multiplier,
+    w_glacier_offset,
+    width=250,
+    sizing_mode="fixed",
+    styles={
+        "border": "1px solid #ddd",
+        "padding": "10px",
+        "background": "white",
+    },
+)
 
-# RIGHT PLOT COLUMN
+
+
+
+ts_with_left_sliders = pn.Row(
+    glacier_slider_left,
+    ts_pane,
+    sizing_mode="stretch_width",
+)
+
 plots = pn.Column(
     plot_pane,
-    ts_pane,
+    ts_with_left_sliders,
     ts_pane_dir,
     sizing_mode="stretch_both",
-    min_height=820
+    min_height=820,
 )
+
 
 
 # TOP

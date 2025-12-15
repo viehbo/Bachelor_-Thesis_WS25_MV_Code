@@ -34,6 +34,8 @@ def do_render(w_timerange,
               w_years=None,
               w_yearly_timerange=None,
               w_alpha_value=None,
+              w_glacier_multiplier=None,
+              w_glacier_offset=None,
               ts_year_sources=None,
               ts_year_renderers=None,
               ts_dir_year_sources=None,
@@ -110,6 +112,9 @@ def do_render(w_timerange,
             ts_source_dir_fit,  # direction fit
             ts_fig_dir,  # direction fig (for y-label/title updates)
             w_stat_ndatapoints=w_stat_ndatapoints,
+            w_glacier_multiplier=w_glacier_multiplier,
+            w_glacier_offset=w_glacier_offset,
+
             # --- yearly wiring (added) ---
             yearly_enabled_widget = w_yearly_mode,
             year_fields=w_years,
