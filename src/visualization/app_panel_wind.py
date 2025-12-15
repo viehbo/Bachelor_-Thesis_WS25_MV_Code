@@ -20,6 +20,11 @@ from src.visualization.utilities.set_datetime import safe_value_as_datetime
 
 from src.visualization.utilities.do_render import do_render
 
+from src.visualization.helpers.glacier_secondary_axis import (
+    normalize_glacier_series_for_secondary_axis,
+    update_glacier_secondary_axis,
+)
+
 from src.visualization.core.poly_fit import poly_fit_datetime
 
 from src.visualization.helpers.apply_alpha_to_raw_lines import apply_alpha_to_raw_lines
@@ -91,7 +96,7 @@ w_years.visible = False  # only when yearly mode is ON
 
 
 # Alpha controls (affects raw/yearly lines only; fit stays unchanged)
-w_alpha_value = pn.widgets.FloatInput(name="Line alpha (0..1)", value=0.35, step=0.05, start=0.0, end=1.0, width=150)
+w_alpha_value = pn.widgets.FloatInput(name="Line alpha (0.1)", value=0.35, step=0.05, start=0.0, end=1.0, width=150)
 w_set_alpha   = pn.widgets.Button(name="Set alpha", button_type="light")
 w_set_alpha.visible = True
 w_alpha_value.visible = True
@@ -315,17 +320,11 @@ def _update_glacier_overlay_from_sliders(event=None):
     if s_raw is None or len(s_raw) == 0:
         return
 
-    # Reuse the same normalization + pushing logic as on_tap
-    from src.visualization.actions.on_tap import (
-        _normalize_glacier_series_for_secondary_axis,
-        _update_glacier_secondary_axis,
-    )
-
     mult = float(w_glacier_multiplier.value)
     off  = float(w_glacier_offset.value)
 
-    s_norm = _normalize_glacier_series_for_secondary_axis(s_raw, multiplier=mult, offset=off)
-    _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
+    s_norm = normalize_glacier_series_for_secondary_axis(s_raw, multiplier=mult, offset=off)
+    update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
 
 w_glacier_multiplier.param.watch(_update_glacier_overlay_from_sliders, "value")

@@ -14,6 +14,10 @@ from src.visualization.plots.yearly_overlays import set_yearly_overlays
 from src.visualization.core.dataset import GLACIERS
 from src.visualization.helpers.extract_timeseries_grid import _extract_timeseries_grid
 from src.visualization.core.poly_fit import poly_fit_datetime
+from src.visualization.helpers.glacier_secondary_axis import (
+    normalize_glacier_series_for_secondary_axis,
+    update_glacier_secondary_axis,
+)
 
 
 # ----------------------------------------------------------------------------- #
@@ -245,63 +249,8 @@ def _update_yearly_overlays(
 
 
 # ----------------------------------------------------------------------------- #
-# Glacier helpers
+# Glacier helpers (moved to src/visualization/helpers/glacier_secondary_axis.py)
 # ----------------------------------------------------------------------------- #
-
-def _normalize_glacier_series_for_secondary_axis(s: pd.Series, multiplier=10, offset=0) -> pd.Series:
-    arr = s.values.astype(float)
-
-    # Guard: empty or all-NaN -> return empty/NaN series (no warnings)
-    if arr.size == 0 or not np.isfinite(arr).any():
-        return pd.Series(np.full_like(arr, np.nan, dtype=float), index=s.index, name=s.name)
-
-    vmin = float(np.nanmin(arr))
-    vmax = float(np.nanmax(arr))
-
-    if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
-        s_norm = (arr - vmin) / (vmax - vmin) * multiplier + offset
-    else:
-        # Degenerate case (constant series): still produce something finite
-        s_norm = np.full_like(arr, offset, dtype=float)
-
-    return pd.Series(s_norm, index=s.index, name=s.name)
-
-
-
-def _update_glacier_secondary_axis(
-    *,
-    s_norm: pd.Series,
-    ts_glacier_source,
-    ts_fig,
-) -> None:
-    """Push glacier series to the secondary y-axis and autoscale it."""
-    if ts_glacier_source is None:
-        return
-    if not (hasattr(ts_fig, "extra_y_ranges") and "glacier" in ts_fig.extra_y_ranges):
-        return
-
-    t_vals = s_norm.index.to_pydatetime().tolist()
-    y_vals = s_norm.values.astype(float).tolist()
-    ts_glacier_source.data = dict(t=t_vals, y=y_vals)
-
-    if y_vals:
-        arr = np.asarray(y_vals, dtype=float)
-
-        # Guard: all-NaN -> do not autoscale; keep existing range
-        if not np.isfinite(arr).any():
-            return
-
-        ymin = float(np.nanmin(arr))
-        ymax = float(np.nanmax(arr))
-
-        if not (np.isfinite(ymin) and np.isfinite(ymax)):
-            return
-
-        pad = 0.05 * (ymax - ymin if ymax > ymin else (abs(ymax) or 1.0))
-        rng = ts_fig.extra_y_ranges["glacier"]
-        rng.start = ymin - pad
-        rng.end = ymax + pad
-
 
 
 # ----------------------------------------------------------------------------- #
@@ -338,13 +287,28 @@ def _plot_scalar_branch(
 ) -> Tuple[pd.Series, str]:
     """Render scalar time series + fits + yearly overlays; return (series, kind)."""
     ts_f = _apply_hour_filter(ts, hours)
+
+    # push raw
+    t_vals = list(pd.to_datetime(ts_f.index).to_pydatetime())
+    y_vals = list(map(float, ts_f.values))
+    ts_source.data = dict(t=t_vals, y=y_vals)
+
+    # stats
     _show_stats(ts_f.values, units, stat_panes)
 
-    set_timeseries(ts_source, ts_f, kind="scalar", units=units, title="Point time series", fig=ts_fig)
-
+    # fit
     if ts_source_fit is not None:
         _polyfit_series_to_source(ts_f.index, ts_f.values, fit_degree, ts_source_fit)
 
+    # title / labels
+    if ts_fig is not None:
+        try:
+            ts_fig.yaxis.axis_label = units
+            ts_fig.title.text = f"Timeseries ({units})"
+        except Exception:
+            pass
+
+    # yearly overlays
     _update_yearly_overlays(
         yearly_enabled_widget=yearly_enabled_widget,
         yearly_window_widget=yearly_window_widget,
@@ -376,11 +340,12 @@ def _plot_uv_branch(
     units: str,
     fit_degree: int,
     hours: Optional[Iterable[int]],
-    # bokeh sources/figs
+    # sources
     ts_source,
     ts_source_fit=None,
     ts_source_dir=None,
     ts_source_dir_fit=None,
+    # figs
     ts_fig=None,
     ts_fig_dir=None,
     # stats
@@ -399,28 +364,47 @@ def _plot_uv_branch(
     ts_dir_year_fit_sources=None,
     ts_dir_year_fit_renderers=None,
 ) -> Tuple[pd.DataFrame, str]:
-    """Render UV time series + direction + fits + yearly overlays; return (df, kind)."""
-    ts_f = _apply_hour_filter(ts_uv, hours)
+    """Render UV wind: speed on main plot, direction on direction plot; return (df, kind)."""
+    df = _apply_hour_filter(ts_uv, hours)
 
-    speed = np.hypot(ts_f["u"].to_numpy(), ts_f["v"].to_numpy())
+    # speed
+    speed = np.hypot(df["u"].to_numpy(), df["v"].to_numpy())
+    t_vals = list(pd.to_datetime(df.index).to_pydatetime())
+    ts_source.data = dict(t=t_vals, y=list(map(float, speed)))
+
+    # stats on speed
     _show_stats(speed, units, stat_panes)
 
-    # Primary: UV as magnitude plot (Observed)
-    set_timeseries(ts_source, ts_f, kind="uv", units=units, title="Wind speed (|u,v|)", fig=ts_fig)
-
-    # Direction series and raw direction plot
-    dir_series = _compute_direction_series(ts_f)
-    if ts_source_dir is not None:
-        set_timeseries(ts_source_dir, dir_series, kind="scalar", units="°", title="Wind direction (from)", fig=ts_fig_dir)
-
-    # Fits
-    if ts_source_dir_fit is not None:
-        _polyfit_series_to_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
-
+    # speed fit
     if ts_source_fit is not None:
-        _polyfit_series_to_source(ts_f.index, speed.tolist(), fit_degree, ts_source_fit)
+        _polyfit_series_to_source(df.index, speed, fit_degree, ts_source_fit)
 
-    # Yearly overlays (main + direction)
+    # direction series
+    if ts_source_dir is not None:
+        dir_series = _compute_direction_series(df)
+        ts_source_dir.data = dict(
+            t=list(pd.to_datetime(dir_series.index).to_pydatetime()),
+            y=list(map(float, dir_series.values)),
+        )
+
+        if ts_source_dir_fit is not None:
+            _polyfit_series_to_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
+
+    # labels
+    if ts_fig is not None:
+        try:
+            ts_fig.yaxis.axis_label = units
+            ts_fig.title.text = f"Speed ({units})"
+        except Exception:
+            pass
+    if ts_fig_dir is not None:
+        try:
+            ts_fig_dir.yaxis.axis_label = "Direction (°)"
+            ts_fig_dir.title.text = "Direction (°)"
+        except Exception:
+            pass
+
+    # yearly overlays
     _update_yearly_overlays(
         yearly_enabled_widget=yearly_enabled_widget,
         yearly_window_widget=yearly_window_widget,
@@ -428,7 +412,7 @@ def _plot_uv_branch(
         alpha_widget=alpha_widget,
         fit_degree=fit_degree,
         ts_fig=ts_fig,
-        base_series_or_df=ts_f,
+        base_series_or_df=df,
         kind="uv",
         units_label=units,
         title_prefix="Yearly",
@@ -443,7 +427,7 @@ def _plot_uv_branch(
         ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
     )
 
-    return ts_f, "uv"
+    return df, "uv"
 
 
 # ----------------------------------------------------------------------------- #
@@ -484,7 +468,7 @@ def _on_tap(
 ):
     """
     External tap handler. Hook from app:
-        bkplot.on_event(Tap, lambda evt: _on_tap(...))
+        bkplot.on_event(Tap, lambda evt: _on_tap(.))
     """
     try:
         # --- Click prelude: feedback + click location ---
@@ -503,11 +487,10 @@ def _on_tap(
             mult = float(getattr(w_glacier_multiplier, "value", 10.0) or 10.0)
             off = float(getattr(w_glacier_offset, "value", 0.0) or 0.0)
 
-            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=mult, offset=off)
+            s_norm = normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=mult, offset=off)
 
-            #s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=multiplier, offset=offset)
             # Push to secondary axis (if wired)
-            _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
+            update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
             if w_glacier_multiplier is not None:
                 w_glacier_multiplier.visible = True
@@ -594,23 +577,29 @@ def _on_tap(
             w_status.object = f"Selected glacier: **{name_used}** ({lon_click:.3f}, {lat_click:.3f})"
             return
 
+        # --- Normal grid-click branch -----------------------------------------
+        try:
+            ts, meta = _extract_timeseries_grid(
+                _last["files"],
+                _last["ds_key"],
+                _last["time_range"],
+                lon_click,
+                lat_click
+            )
+        except Exception as e:
+            w_status.object = f"Tap failed: {e}"
+            return
 
-
-        # --- Normal grid branch ------------------------------------------------
-        ts, meta = _extract_timeseries_grid(
-            _last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click
-        )
-
-        if w_glacier_multiplier is not None:
-            w_glacier_multiplier.visible = False
-        if w_glacier_offset is not None:
-            w_glacier_offset.visible = False
-        _last["glacier_series_raw"] = None
-        _last["selected_glacier_name"] = None
+        if ts is None or meta is None or len(ts) == 0:
+            w_status.object = "No data at clicked location."
+            return
 
         hours = _last.get("hours")
         if w_stat_ndatapoints is not None:
-            w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts.shape[0]}"
+            try:
+                w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts.shape[0]}"
+            except Exception:
+                pass
 
         if meta["kind"] == "scalar":
             ts_used, kind_used = _plot_scalar_branch(
@@ -663,13 +652,11 @@ def _on_tap(
                 ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
             )
 
-        # Cache last pick for slider-driven updates
         _last["picked_series"] = ts_used
         _last["picked_kind"] = kind_used
         _last["picked_units"] = meta.get("units", "" if kind_used == "scalar" else "m/s")
 
-        # Final status
-        w_status.object = f"Picked grid point at ({lon_click:.3f}, {lat_click:.3f})."
-
-    except Exception as ex:
-        w_status.object = f"**Click error:** {ex}"
+        w_status.object = f"Selected grid point ({lon_click:.3f}, {lat_click:.3f})"
+        set_timeseries(ts_source, ts_used)
+    except Exception as e:
+        w_status.object = f"Tap handler error: {e}"

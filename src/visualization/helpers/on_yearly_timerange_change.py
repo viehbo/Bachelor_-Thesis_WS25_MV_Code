@@ -1,9 +1,12 @@
-from datetime import datetime as _dt
 import numpy as _np
 import pandas as _pd
 
-_DUMMY_START = _dt(2000, 1, 1)
-_DUMMY_END   = _dt(2000, 12, 31, 23, 59, 59)
+from src.visualization.helpers.yearly_mode import (
+    DUMMY_START,
+    DUMMY_END,
+    get_selected_years,
+    get_dummy_year_window,
+)
 
 
 def _on_yearly_timerange_change(
@@ -40,12 +43,15 @@ def _on_yearly_timerange_change(
     if s is None or kind not in ("scalar", "uv"):
         return
 
-    years_selected = [w.value for w in w_years]
-    yearly_window = w_yearly_timerange.value
-    if not (yearly_window and all(yearly_window)):
+    # IMPORTANT: w_years is a MultiChoice in your app; use .value (via helper)
+    years_selected = get_selected_years(w_years)
+
+    yearly_window = get_dummy_year_window(w_yearly_timerange)
+    if yearly_window is None:
         return
 
     alpha = float(w_alpha_value.value or 0.35)
+    fit_degree = int(w_fit_degree.value)
 
     # --- Main overlays ---
     set_yearly_overlays(
@@ -57,7 +63,7 @@ def _on_yearly_timerange_change(
         yearly_renderers=ts_year_renderers,
         yearly_fit_sources=ts_year_fit_sources,
         yearly_fit_renderers=ts_year_fit_renderers,
-        fit_degree=int(w_fit_degree.value),
+        fit_degree=fit_degree,
         alpha=alpha,
         units=units,
         title_prefix="Yearly overlays",
@@ -80,7 +86,7 @@ def _on_yearly_timerange_change(
             yearly_renderers=ts_dir_year_renderers,
             yearly_fit_sources=ts_dir_year_fit_sources,
             yearly_fit_renderers=ts_dir_year_fit_renderers,
-            fit_degree=int(w_fit_degree.value),
+            fit_degree=fit_degree,
             alpha=alpha,
             units="°",
             title_prefix="Yearly (direction)",
@@ -89,11 +95,11 @@ def _on_yearly_timerange_change(
 
     # Keep x-ranges locked to dummy year
     try:
-        ts_fig.x_range.start = _DUMMY_START
-        ts_fig.x_range.end = _DUMMY_END
+        ts_fig.x_range.start = DUMMY_START
+        ts_fig.x_range.end = DUMMY_END
         if ts_fig_dir is not None:
-            ts_fig_dir.x_range.start = _DUMMY_START
-            ts_fig_dir.x_range.end = _DUMMY_END
+            ts_fig_dir.x_range.start = DUMMY_START
+            ts_fig_dir.x_range.end = DUMMY_END
             ts_fig_dir.y_range.start = 0
             ts_fig_dir.y_range.end = 360
     except Exception:
