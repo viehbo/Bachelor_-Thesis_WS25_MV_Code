@@ -12,8 +12,6 @@ from src.visualization.actions.on_tap import _on_tap  # new single import
 
 
 def do_render(w_timerange,
-              w_hour_start,
-              w_hour_end,
               w_files,
               w_dataset,
               w_status,
@@ -31,7 +29,7 @@ def do_render(w_timerange,
               ts_source_dir=None,
               ts_source_dir_fit = None,
               ts_pane_dir=None,
-              # --- NEW: yearly mode plumbing
+              w_hours=None,
               w_yearly_mode=None,
               w_years=None,
               w_yearly_timerange=None,
@@ -52,13 +50,17 @@ def do_render(w_timerange,
         if (not w_timerange.disabled) and all(w_timerange.value):
             t_val = w_timerange.value
 
+        hour_list = None
+        if w_hours is not None and w_hours.value:
+            # values are strings like "00", convert to ints
+            hour_list = sorted({int(h) for h in w_hours.value})
+
         avg2d, extent, units, lon, lat, u2d, v2d = compute_average(
             DATASETS,
             selected,
             w_dataset.value,
             t_val,
-            hour_start=w_hour_start.value,
-            hour_end=w_hour_end.value
+            hours=hour_list,
         )
 
         label_base = DATASETS[w_dataset.value]["label"]
@@ -81,8 +83,7 @@ def do_render(w_timerange,
         _last["files"] = selected
         _last["ds_key"] = w_dataset.value
         _last["time_range"] = t_val
-        _last["hour_start"] = w_hour_start.value
-        _last["hour_end"] = w_hour_end.value
+        _last["hours"] = hour_list
         _last["lon"] = lon
         _last["lat"] = lat
         _last["figure"] = bkplot

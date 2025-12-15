@@ -3,11 +3,11 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
-from src.visualization.helpers.open_all import _open_all
+from src.visualization.helpers.open_all import _open_all  # unused here but kept for compatibility
 from src.visualization.helpers.time_name import _time_name
 
-def _to_py_naive(dt_any):
 
+def _to_py_naive(dt_any):
     # pandas / numpy case
     if isinstance(dt_any, (np.datetime64, pd.Timestamp)):
         ts = pd.to_datetime(dt_any)
@@ -20,7 +20,6 @@ def _to_py_naive(dt_any):
         return dt_any.replace(tzinfo=None)
 
     # cftime object (no tz), convert by components
-    # Avoid importing cftime unless needed
     mod = type(dt_any).__module__
     if "cftime" in mod:
         return datetime(
@@ -37,48 +36,47 @@ def _to_py_naive(dt_any):
         raise ValueError(f"Cannot convert time value {dt_any!r} to python datetime.")
     return ts.to_pydatetime()
 
-def load_time_range(w_files, w_status, w_timerange):
-    selected = [Path(p) for p in w_files.value]
-    if not selected:
-        w_status.object = "Select one or more files first."
-        return
 
-
+def load_time_range(w_files, w_status, w_timerange, w_hours=None):
+    """
+    Load global time range and populate available hours from the selected files.
+    Uses a tolerant multi-file open: combine='by_coords', join='outer'.
+    """
+    import xarray as xr
     try:
-        # Use your context manager; rely on xarray's CF decoding
-        with _open_all(selected) as ds:
+        paths = [Path(p) for p in w_files.value]
+        if not paths:
+            w_status.object = "**No files selected.**"
+            return
+
+        # Robust open across files with differing time stamps
+        with xr.open_mfdataset(
+            [str(p) for p in paths],
+            combine="by_coords",   # align by coordinate labels
+            join="outer",          # allow non-identical coordinate sets
+            parallel=False,
+        ) as ds:
             tname = _time_name(ds)
+            # use to_index() to get a single pandas DatetimeIndex
+            t = pd.to_datetime(ds[tname].to_index())
 
-            # Prefer the decoded coordinate from xarray directly
-            tcoord = ds[tname].to_index() if hasattr(ds[tname], "to_index") else None
-            if tcoord is not None and len(tcoord) > 0:
-                tmin_raw = tcoord.min()
-                tmax_raw = tcoord.max()
-            else:
-                # Fallback to the raw array
-                vals = ds[tname].values
-                tmin_raw = vals.min()
-                tmax_raw = vals.max()
-
-        # Convert to tz-naive python datetimes (Panel slider wants naive dt)
-        t0 = _to_py_naive(tmin_raw)
-        t1 = _to_py_naive(tmax_raw)
-
-        # Make sure start <= end
-        if t0 > t1:
-            t0, t1 = t1, t0
-
-        # Choose a sensible step (keep your 6h default)
-        step = pd.Timedelta(hours=6)
-
-        # Wire into the Panel slider
-        w_timerange.start = t0
-        w_timerange.end   = t1
-        w_timerange.value = (t0, t1)
-        w_timerange.step  = int(step.total_seconds() * 1000)  # ms
+        # Slider range
+        w_timerange.start = t.min().to_pydatetime()
+        w_timerange.end   = t.max().to_pydatetime()
+        w_timerange.value = (w_timerange.start, w_timerange.end)
         w_timerange.disabled = False
-        w_timerange.visible = True
-        w_status.object = f"Time range loaded: {t0} → {t1}"
+        w_timerange.visible  = True
 
+        # Available hours (as strings "00".."23")
+        if w_hours is not None:
+            hours = pd.Index(t.hour).unique().sort_values().tolist()
+            # Map 24->0 if a 1..24 convention appears (rare)
+            if (24 in hours) and (0 not in hours):
+                hours = sorted({0 if h == 24 else h for h in hours})
+            labels = [f"{h:02d}" for h in hours]
+            w_hours.options = labels
+            w_hours.value = labels  # default: "all hours"
+
+        w_status.object = "Loaded time range and hours."
     except Exception as e:
-        w_status.object = f"**Error loading time range:** {e}"
+        w_status.object = f"**Error:** {e}"

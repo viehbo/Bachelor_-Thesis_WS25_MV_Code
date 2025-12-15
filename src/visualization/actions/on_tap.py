@@ -1,52 +1,452 @@
 # src/visualization/actions/on_tap.py
+from __future__ import annotations
+
 from math import pi
+from typing import Dict, Iterable, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 
 from src.visualization.helpers.mercator_transformer import y_to_lat, x_to_lon
 from src.visualization.helpers.set_timeseries import set_timeseries
-
 from src.visualization.plots.yearly_overlays import set_yearly_overlays
 
-
 from src.visualization.core.dataset import GLACIERS
-
 from src.visualization.helpers.extract_timeseries_grid import _extract_timeseries_grid
-# poly fit helper
 from src.visualization.core.poly_fit import poly_fit_datetime
 
 
+# ----------------------------------------------------------------------------- #
+# Constants
+# ----------------------------------------------------------------------------- #
 
-R = 6378137.0
+R = 6378137.0  # WebMercator Earth radius (meters)
+
+# Dummy-year bounds used in Yearly mode
+from datetime import datetime as _dt
+_DUMMY_START = _dt(2000, 1, 1)
+_DUMMY_END = _dt(2000, 12, 31, 23, 59, 59)
 
 
-def _show_stats(values, unit, panes):
-    """Update the three stats panes passed in from the app."""
-    mean_p, max_p, min_p = panes["mean"], panes["max"], panes["min"]
-    if len(values) == 0 or not np.isfinite(values).any():
+# ----------------------------------------------------------------------------- #
+# Small utilities
+# ----------------------------------------------------------------------------- #
+
+def _apply_hour_filter(
+    ts: Union[pd.Series, pd.DataFrame],
+    hours: Optional[Iterable[int]],
+) -> Union[pd.Series, pd.DataFrame]:
+    """Filter a time series (Series or DataFrame) to the given set of hours."""
+    if not hours:
+        return ts
+    idx = pd.to_datetime(ts.index)
+    mask = idx.hour.astype(int).isin(set(int(h) for h in hours))
+    return ts.loc[mask]
+
+
+def _show_stats(values: Union[np.ndarray, Iterable[float]], unit: str, panes: Dict[str, object]) -> None:
+    """Update the side stats panes."""
+    mean_p, max_p, min_p = panes.get("mean"), panes.get("max"), panes.get("min")
+    if mean_p is None or max_p is None or min_p is None:
+        return
+
+    a = np.asarray(list(values), dtype=float)
+    if a.size == 0 or not np.isfinite(a).any():
         mean_p.object = "**Mean:** –"
         max_p.object = "**Max:** –"
         min_p.object = "**Min:** –"
         return
-    v = np.asarray(values, dtype=float)
-    mean_p.object = f"**Mean:** {np.nanmean(v):.3f} {unit}"
-    max_p.object = f"**Max:** {np.nanmax(v):.3f} {unit}"
-    min_p.object = f"**Min:** {np.nanmin(v):.3f} {unit}"
 
+    mean_p.object = f"**Mean:** {np.nanmean(a):.3f} {unit}"
+    max_p.object = f"**Max:** {np.nanmax(a):.3f} {unit}"
+    min_p.object = f"**Min:** {np.nanmin(a):.3f} {unit}"
+
+
+def _nearest_glacier_name(glaciers: dict, x: float, y: float, max_dist_m: float = 10_000) -> Optional[str]:
+    """Return nearest glacier name within max_dist_m, or None."""
+    if not glaciers:
+        return None
+    lon = glaciers.get("lon")
+    lat = glaciers.get("lat")
+    names = glaciers.get("name")
+    if lon is None or lat is None or getattr(lon, "size", 0) == 0:
+        return None
+
+    # Project glacier lon/lat to WebMercator meters to compare with evt.x/evt.y
+    Gxm = (lon * (pi / 180.0) * R)
+    Gym = R * np.log(np.tan((pi / 4.0) + (lat * (pi / 180.0) / 2.0)))
+    di = np.argmin((Gxm - x) ** 2 + (Gym - y) ** 2)
+    d_m = float(np.sqrt((Gxm[di] - x) ** 2 + (Gym[di] - y) ** 2))
+    if d_m < max_dist_m:
+        name = names[di]
+        return name.item() if hasattr(name, "item") else str(name)
+    return None
+
+
+def _polyfit_series_to_source(
+    ts_index: Iterable,
+    y_values: Iterable[float],
+    fit_degree: int,
+    target_source,
+) -> None:
+    """Compute a polynomial fit and push into a Bokeh ColumnDataSource."""
+    t_vals = list(pd.to_datetime(ts_index).to_pydatetime())
+    y_vals = list(map(float, y_values))
+    if len(t_vals) >= fit_degree + 1:
+        t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=int(fit_degree), points=400)
+        target_source.data = dict(t=t_fit, y=y_fit)
+    else:
+        target_source.data = dict(t=[], y=[])
+
+
+def _compute_direction_series(uv_df: pd.DataFrame) -> pd.Series:
+    """Return wind direction (from) in degrees [0, 360) from a UV dataframe."""
+    # dir = 270 - arctan2(v, u) in degrees, modulo 360
+    dir_deg = (270.0 - np.degrees(np.arctan2(uv_df["v"].to_numpy(), uv_df["u"].to_numpy()))) % 360.0
+    return pd.Series(dir_deg, index=uv_df.index, name="dir")
+
+
+def _current_dummy_range(yearly_window_widget) -> Optional[Tuple[_dt, _dt]]:
+    """Read (start, end) from the yearly dummy-year slider, if available."""
+    if yearly_window_widget is None:
+        return None
+    try:
+        v = yearly_window_widget.value
+        if v and all(v):
+            return v  # (start, end) in dummy year
+    except Exception:
+        pass
+    return None
+
+
+def _selected_years(year_fields) -> List[int]:
+    """
+    Return the list of selected years from either:
+    - a MultiChoice (via .value), or
+    - a list of Select widgets (legacy).
+    """
+    if hasattr(year_fields, "value"):
+        return list(year_fields.value or [])
+    return [w.value for w in (year_fields or [])]
+
+
+def _update_yearly_overlays(
+    *,
+    yearly_enabled_widget,
+    yearly_window_widget,
+    year_fields,
+    alpha_widget,
+    fit_degree: int,
+    # main figure
+    ts_fig,
+    base_series_or_df: Union[pd.Series, pd.DataFrame],
+    kind: str,               # "scalar" | "uv"
+    units_label: str,
+    title_prefix: str,
+    ts_year_sources,
+    ts_year_renderers,
+    ts_year_fit_sources,
+    ts_year_fit_renderers,
+    # direction figure (optional)
+    ts_fig_dir=None,
+    ts_dir_year_sources=None,
+    ts_dir_year_renderers=None,
+    ts_dir_year_fit_sources=None,
+    ts_dir_year_fit_renderers=None,
+) -> None:
+    """
+    Draw or clear yearly overlays on the main (and optional direction) plot.
+    Also snaps x-ranges to the dummy year when yearly mode is ON.
+    """
+    YEARLY_ON = bool(getattr(yearly_enabled_widget, "value", False))
+
+    def _clear_pair(src_list, rnd_list):
+        if src_list and rnd_list:
+            for s, r in zip(src_list, rnd_list):
+                s.data = dict(t=[], y=[])
+                r.visible = False
+
+    if not YEARLY_ON:
+        _clear_pair(ts_year_sources, ts_year_renderers)
+        _clear_pair(ts_year_fit_sources, ts_year_fit_renderers)
+        _clear_pair(ts_dir_year_sources, ts_dir_year_renderers)
+        _clear_pair(ts_dir_year_fit_sources, ts_dir_year_fit_renderers)
+        return
+
+    years_selected = _selected_years(year_fields)
+    dummy_range = _current_dummy_range(yearly_window_widget)
+    alpha = float(getattr(alpha_widget, "value", 0.35) or 0.35)
+
+    # Main overlays
+    set_yearly_overlays(
+        ts_fig,
+        base_series_or_df,
+        kind=kind,
+        years=years_selected,
+        yearly_sources=ts_year_sources,
+        yearly_renderers=ts_year_renderers,
+        yearly_fit_sources=ts_year_fit_sources,
+        yearly_fit_renderers=ts_year_fit_renderers,
+        fit_degree=int(fit_degree),
+        alpha=alpha,
+        units=units_label,
+        title_prefix=title_prefix,
+        dummy_range=dummy_range,
+    )
+
+    # Direction overlays (if a direction fig exists)
+    if ts_fig_dir is not None and ts_dir_year_sources and ts_dir_year_renderers:
+        if kind == "uv":
+            dir_series = _compute_direction_series(base_series_or_df)
+            set_yearly_overlays(
+                ts_fig_dir,
+                dir_series,
+                kind="scalar",
+                years=years_selected,
+                yearly_sources=ts_dir_year_sources,
+                yearly_renderers=ts_dir_year_renderers,
+                yearly_fit_sources=ts_dir_year_fit_sources,
+                yearly_fit_renderers=ts_dir_year_fit_renderers,
+                fit_degree=int(fit_degree),
+                alpha=alpha,
+                units="°",
+                title_prefix="Yearly (direction)",
+                dummy_range=dummy_range,
+            )
+        else:
+            # Optional: reuse scalar series on direction fig if desired
+            set_yearly_overlays(
+                ts_fig_dir,
+                base_series_or_df,
+                kind="scalar",
+                years=years_selected,
+                yearly_sources=ts_dir_year_sources,
+                yearly_renderers=ts_dir_year_renderers,
+                yearly_fit_sources=ts_dir_year_fit_sources,
+                yearly_fit_renderers=ts_dir_year_fit_renderers,
+                fit_degree=int(fit_degree),
+                alpha=alpha,
+                units="°",
+                title_prefix="Yearly (direction)",
+                dummy_range=dummy_range,
+            )
+
+    # Lock x-ranges to dummy year
+    try:
+        ts_fig.x_range.start = _DUMMY_START
+        ts_fig.x_range.end = _DUMMY_END
+        if ts_fig_dir is not None:
+            ts_fig_dir.x_range.start = _DUMMY_START
+            ts_fig_dir.x_range.end = _DUMMY_END
+            ts_fig_dir.y_range.start = 0
+            ts_fig_dir.y_range.end = 360
+    except Exception:
+        pass
+
+
+# ----------------------------------------------------------------------------- #
+# Glacier helpers
+# ----------------------------------------------------------------------------- #
+
+def _normalize_glacier_series_for_secondary_axis(s: pd.Series) -> pd.Series:
+    """Normalize glacier series to 0..10 for a secondary axis line."""
+    arr = s.values.astype(float)
+    vmin = float(np.nanmin(arr))
+    vmax = float(np.nanmax(arr))
+    if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
+        s_norm = (arr - vmin) / (vmax - vmin) * 10.0
+    else:
+        s_norm = np.full_like(arr, 5.0)
+    return pd.Series(s_norm, index=s.index, name=s.name)
+
+
+def _update_glacier_secondary_axis(
+    *,
+    s_norm: pd.Series,
+    ts_glacier_source,
+    ts_fig,
+) -> None:
+    """Push glacier series to the secondary y-axis and autoscale it."""
+    if ts_glacier_source is None:
+        return
+    if not (hasattr(ts_fig, "extra_y_ranges") and "glacier" in ts_fig.extra_y_ranges):
+        return
+
+    t_vals = s_norm.index.to_pydatetime().tolist()
+    y_vals = s_norm.values.astype(float).tolist()
+    ts_glacier_source.data = dict(t=t_vals, y=y_vals)
+
+    if y_vals:
+        arr = np.asarray(y_vals, dtype=float)
+        ymin = float(np.nanmin(arr))
+        ymax = float(np.nanmax(arr))
+        if not (np.isfinite(ymin) and np.isfinite(ymax)):
+            ymin, ymax = -1.0, 1.0
+        pad = 0.05 * (ymax - ymin if ymax > ymin else (abs(ymax) or 1.0))
+        rng = ts_fig.extra_y_ranges["glacier"]
+        rng.start = ymin - pad
+        rng.end = ymax + pad
+
+
+# ----------------------------------------------------------------------------- #
+# Plotting branches (scalar / uv)
+# ----------------------------------------------------------------------------- #
+
+def _plot_scalar_branch(
+    *,
+    ts: pd.Series,
+    units: str,
+    fit_degree: int,
+    hours: Optional[Iterable[int]],
+    # bokeh sources/figs
+    ts_source,
+    ts_source_fit=None,
+    ts_fig=None,
+    # stats
+    stat_panes: Dict[str, object],
+    # yearly
+    yearly_enabled_widget=None,
+    yearly_window_widget=None,
+    year_fields=None,
+    alpha_widget=None,
+    ts_year_sources=None,
+    ts_year_renderers=None,
+    ts_year_fit_sources=None,
+    ts_year_fit_renderers=None,
+    # dir plot (optional)
+    ts_fig_dir=None,
+    ts_dir_year_sources=None,
+    ts_dir_year_renderers=None,
+    ts_dir_year_fit_sources=None,
+    ts_dir_year_fit_renderers=None,
+) -> Tuple[pd.Series, str]:
+    """Render scalar time series + fits + yearly overlays; return (series, kind)."""
+    ts_f = _apply_hour_filter(ts, hours)
+    _show_stats(ts_f.values, units, stat_panes)
+
+    set_timeseries(ts_source, ts_f, kind="scalar", units=units, title="Point time series", fig=ts_fig)
+
+    if ts_source_fit is not None:
+        _polyfit_series_to_source(ts_f.index, ts_f.values, fit_degree, ts_source_fit)
+
+    _update_yearly_overlays(
+        yearly_enabled_widget=yearly_enabled_widget,
+        yearly_window_widget=yearly_window_widget,
+        year_fields=year_fields,
+        alpha_widget=alpha_widget,
+        fit_degree=fit_degree,
+        ts_fig=ts_fig,
+        base_series_or_df=ts_f,
+        kind="scalar",
+        units_label=units,
+        title_prefix="Yearly",
+        ts_year_sources=ts_year_sources,
+        ts_year_renderers=ts_year_renderers,
+        ts_year_fit_sources=ts_year_fit_sources,
+        ts_year_fit_renderers=ts_year_fit_renderers,
+        ts_fig_dir=ts_fig_dir,
+        ts_dir_year_sources=ts_dir_year_sources,
+        ts_dir_year_renderers=ts_dir_year_renderers,
+        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+    )
+
+    return ts_f, "scalar"
+
+
+def _plot_uv_branch(
+    *,
+    ts_uv: pd.DataFrame,
+    units: str,
+    fit_degree: int,
+    hours: Optional[Iterable[int]],
+    # bokeh sources/figs
+    ts_source,
+    ts_source_fit=None,
+    ts_source_dir=None,
+    ts_source_dir_fit=None,
+    ts_fig=None,
+    ts_fig_dir=None,
+    # stats
+    stat_panes: Dict[str, object],
+    # yearly
+    yearly_enabled_widget=None,
+    yearly_window_widget=None,
+    year_fields=None,
+    alpha_widget=None,
+    ts_year_sources=None,
+    ts_year_renderers=None,
+    ts_year_fit_sources=None,
+    ts_year_fit_renderers=None,
+    ts_dir_year_sources=None,
+    ts_dir_year_renderers=None,
+    ts_dir_year_fit_sources=None,
+    ts_dir_year_fit_renderers=None,
+) -> Tuple[pd.DataFrame, str]:
+    """Render UV time series + direction + fits + yearly overlays; return (df, kind)."""
+    ts_f = _apply_hour_filter(ts_uv, hours)
+
+    speed = np.hypot(ts_f["u"].to_numpy(), ts_f["v"].to_numpy())
+    _show_stats(speed, units, stat_panes)
+
+    # Primary: UV as magnitude plot (Observed)
+    set_timeseries(ts_source, ts_f, kind="uv", units=units, title="Wind speed (|u,v|)", fig=ts_fig)
+
+    # Direction series and raw direction plot
+    dir_series = _compute_direction_series(ts_f)
+    if ts_source_dir is not None:
+        set_timeseries(ts_source_dir, dir_series, kind="scalar", units="°", title="Wind direction (from)", fig=ts_fig_dir)
+
+    # Fits
+    if ts_source_dir_fit is not None:
+        _polyfit_series_to_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
+
+    if ts_source_fit is not None:
+        _polyfit_series_to_source(ts_f.index, speed.tolist(), fit_degree, ts_source_fit)
+
+    # Yearly overlays (main + direction)
+    _update_yearly_overlays(
+        yearly_enabled_widget=yearly_enabled_widget,
+        yearly_window_widget=yearly_window_widget,
+        year_fields=year_fields,
+        alpha_widget=alpha_widget,
+        fit_degree=fit_degree,
+        ts_fig=ts_fig,
+        base_series_or_df=ts_f,
+        kind="uv",
+        units_label=units,
+        title_prefix="Yearly",
+        ts_year_sources=ts_year_sources,
+        ts_year_renderers=ts_year_renderers,
+        ts_year_fit_sources=ts_year_fit_sources,
+        ts_year_fit_renderers=ts_year_fit_renderers,
+        ts_fig_dir=ts_fig_dir,
+        ts_dir_year_sources=ts_dir_year_sources,
+        ts_dir_year_renderers=ts_dir_year_renderers,
+        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+    )
+
+    return ts_f, "uv"
+
+
+# ----------------------------------------------------------------------------- #
+# External entry point
+# ----------------------------------------------------------------------------- #
 
 def _on_tap(
     evt,
     w_status,
-    _last,
+    _last: dict,
     ts_source,
     ts_fig,
     _stat_panes,
     ts_source_fit=None,
-    fit_degree=3,
+    fit_degree: int = 3,
     ts_source_dir=None,
     ts_source_dir_fit=None,
     ts_fig_dir=None,
-    # Yearly UI/state
+    # Yearly UI / state
     yearly_enabled_widget=None,
     year_fields=None,
     alpha_widget=None,
@@ -56,520 +456,175 @@ def _on_tap(
     ts_dir_year_sources=None,
     ts_dir_year_renderers=None,
     w_stat_ndatapoints=None,
-    # Yearly FIT overlays (main & direction)
+    # Yearly FIT overlays
     ts_year_fit_sources=None,
     ts_year_fit_renderers=None,
     ts_dir_year_fit_sources=None,
     ts_dir_year_fit_renderers=None,
-    # Glacier overlay on secondary y-axis
+    # Glacier overlay (secondary axis)
     ts_glacier_source=None,
 ):
     """
-    External tap handler. Hook from app like:
-    bkplot.on_event(Tap, lambda evt: _on_tap(...))
+    External tap handler. Hook from app:
+        bkplot.on_event(Tap, lambda evt: _on_tap(...))
     """
     try:
-        # --- helper to maintain yearly overlays ---
-        def _maybe_update_yearly_overlays(kind, base_series_or_df, units_label, title_prefix):
-            """
-            Draw/clear yearly overlays based on the Yearly mode checkbox.
-            Also snaps x-range to a single dummy-year window when Yearly is ON.
-            """
-            YEARLY_ON = bool(getattr(yearly_enabled_widget, "value", False))
-
-            # Current dummy-year sub-window (if any)
-            yearly_window = None
-            if yearly_window_widget is not None:
-                try:
-                    v = yearly_window_widget.value
-                    if v and all(v):
-                        yearly_window = v  # (start, end) in dummy year 2000
-                except Exception:
-                    yearly_window = None
-
-
-            # Clear function for any pair of lists
-            def _clear_pair(src_list, rnd_list):
-                if src_list and rnd_list:
-                    for s, r in zip(src_list, rnd_list):
-                        s.data = dict(t=[], y=[])
-                        r.visible = False
-
-            if not YEARLY_ON:
-                # Clear overlays; DO NOT return from the whole tap handler
-                _clear_pair(ts_year_sources, ts_year_renderers)
-                _clear_pair(ts_year_fit_sources, ts_year_fit_renderers)
-                _clear_pair(ts_dir_year_sources, ts_dir_year_renderers)
-                _clear_pair(ts_dir_year_fit_sources, ts_dir_year_fit_renderers)
-                return
-
-            # Build selected years
-            # - if `year_fields` is a MultiChoice: use its .value (list)
-            # - if it's still a list of Selects: fall back to old behavior
-            if hasattr(year_fields, "value"):
-                # Panel MultiChoice: value is already a (possibly empty) list
-                years_selected = list(year_fields.value or [])
-            else:
-                # Legacy: list of individual widgets
-                years_selected = [w.value for w in (year_fields or [])]
-
-            # Main plot overlays
-            set_yearly_overlays(
-                ts_fig,
-                base_series_or_df,
-                kind=kind,  # "scalar" or "uv"
-                years=years_selected,
-                yearly_sources=ts_year_sources,
-                yearly_renderers=ts_year_renderers,
-                yearly_fit_sources=ts_year_fit_sources,
-                yearly_fit_renderers=ts_year_fit_renderers,
-                fit_degree=fit_degree,
-                alpha=float(getattr(alpha_widget, "value", 0.35) or 0.35),
-                units=units_label,
-                title_prefix=title_prefix,
-                dummy_range=yearly_window,
-            )
-
-            # Direction overlays (if we have a direction figure)
-            if ts_fig_dir is not None and ts_dir_year_sources and ts_dir_year_renderers:
-                if kind == "uv":
-                    # Direction (0..360) from u,v
-                    dir_deg = (
-                        270.0 - np.degrees(np.arctan2(base_series_or_df["v"].to_numpy(),
-                                                      base_series_or_df["u"].to_numpy()))
-                    ) % 360.0
-                    dir_series = pd.Series(dir_deg, index=base_series_or_df.index, name="dir")
-                    print("FRITZ dir_series: ", dir_series.shape)
-                    set_yearly_overlays(
-                        ts_fig_dir,
-                        dir_series,
-                        kind="scalar",
-                        years=years_selected,
-                        yearly_sources=ts_dir_year_sources,
-                        yearly_renderers=ts_dir_year_renderers,
-                        yearly_fit_sources=ts_dir_year_fit_sources,
-                        yearly_fit_renderers=ts_dir_year_fit_renderers,
-                        fit_degree=fit_degree,
-                        alpha=float(getattr(alpha_widget, "value", 0.35) or 0.35),
-                        units="°",
-                        title_prefix="Yearly (direction)",
-                        dummy_range=yearly_window,
-                    )
-                else:
-                    # If you also want direction overlays for scalar, reuse scalar series
-                    set_yearly_overlays(
-                        ts_fig_dir,
-                        base_series_or_df,
-                        kind="scalar",
-                        years=years_selected,
-                        yearly_sources=ts_dir_year_sources,
-                        yearly_renderers=ts_dir_year_renderers,
-                        yearly_fit_sources=ts_dir_year_fit_sources,
-                        yearly_fit_renderers=ts_dir_year_fit_renderers,
-                        fit_degree=fit_degree,
-                        alpha=float(getattr(alpha_widget, "value", 0.35) or 0.35),
-                        units="°",
-                        title_prefix="Yearly (direction)",
-                        dummy_range=yearly_window,
-                    )
-
-
-            # Snap both x-ranges to 1-year dummy window
-            from datetime import datetime
-
-            DUMMY_START = datetime(2000, 1, 1)
-            DUMMY_END = datetime(2000, 12, 31, 23, 59, 59)
-            try:
-                ts_fig.x_range.start = DUMMY_START
-                ts_fig.x_range.end = DUMMY_END
-                if ts_fig_dir is not None:
-                    ts_fig_dir.x_range.start = DUMMY_START
-                    ts_fig_dir.x_range.end = DUMMY_END
-                    ts_fig_dir.y_range.start = 0
-                    ts_fig_dir.y_range.end = 360
-            except Exception:
-                pass
-
-        # ------------------ click prelude ------------------
+        # --- Click prelude: feedback + click location ---
         w_status.object = f"Tap at x={evt.x:.1f}, y={evt.y:.1f}"
-        # WebMercator -> lon/lat
         lon_click = float(x_to_lon(evt.x))
         lat_click = float(y_to_lat(evt.y))
 
-        # Near-glacier detection (optional)
-        name_used = None
-        gl = _last.get("glaciers")
-        if gl and gl.get("lon") is not None and getattr(gl["lon"], "size", 0):
-            Gxm = (gl["lon"] * (pi / 180.0) * R)
-            Gym = R * np.log(np.tan((pi / 4.0) + (gl["lat"] * (pi / 180.0) / 2.0)))
-            di = np.argmin((Gxm - evt.x) ** 2 + (Gym - evt.y) ** 2)
-            d_m = np.sqrt((Gxm[di] - evt.x) ** 2 + (Gym[di] - evt.y) ** 2)
-            if d_m < 10_000:
-                name = gl["name"][di]
-                name_used = name.item() if hasattr(name, "item") else name
-
-        # ------------------ glacier branch ------------------
+        # --- If near a glacier, handle that branch first ----------------------
+        name_used = _nearest_glacier_name(_last.get("glaciers"), evt.x, evt.y)
         if name_used:
             from src.visualization.plots.glacier_overlay import glacier_series_by_name
 
-            # 1) Glacier time series (always kept on secondary axis)
-            s = glacier_series_by_name(GLACIERS["dir"], str(name_used))
+            # Glacier series (always 'scalar'); normalize for the secondary axis
+            s_glacier = glacier_series_by_name(GLACIERS["dir"], str(name_used))
+            s_norm = _normalize_glacier_series_for_secondary_axis(s_glacier)
+            # Push to secondary axis (if wired)
+            _update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
-            # --- Normalize glacier data to range 0–10 ---
-            arr = s.values.astype(float)
-            vmin = float(np.nanmin(arr))
-            vmax = float(np.nanmax(arr))
-
-            if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
-                s_norm = (arr - vmin) / (vmax - vmin) * 10.0
-            else:
-                # Degenerate case: glacier is constant → flat line at 5
-                s_norm = np.full_like(arr, 5.0)
-
-            # Replace the time series with normalized values
-            s = pd.Series(s_norm, index=s.index, name=s.name)
-
-            # Show glacier stats in the side panes
-            _show_stats(s.values, "mm w.e.", _stat_panes)
-
-            # Update / draw glacier line on secondary y-axis if wired
-            if ts_glacier_source is not None and hasattr(ts_fig, "extra_y_ranges") and "glacier" in ts_fig.extra_y_ranges:
-                t_vals = s.index.to_pydatetime().tolist()
-                y_vals = s.values.astype(float).tolist()
-                ts_glacier_source.data = dict(t=t_vals, y=y_vals)
-
-                # Rescale the secondary y-axis to glacier data
-                if y_vals:
-                    arr = np.asarray(y_vals, dtype=float)
-                    ymin = float(np.nanmin(arr))
-                    ymax = float(np.nanmax(arr))
-                    if not (np.isfinite(ymin) and np.isfinite(ymax)):
-                        ymin, ymax = -1.0, 1.0
-                    pad = 0.05 * (ymax - ymin if ymax > ymin else (abs(ymax) or 1.0))
-                    rng = ts_fig.extra_y_ranges["glacier"]
-                    rng.start = ymin - pad
-                    rng.end = ymax + pad
-            else:
-                # Fallback: if secondary axis is not set up, behave as before:
-                set_timeseries(
-                    ts_source,
-                    s,
-                    kind="scalar",
-                    units="mm w.e.",
-                    title=f"Glacier {name_used} — time series",
-                    fig=ts_fig,
-                )
-                _last["picked_series"] = s
-                _last["picked_kind"] = "scalar"
-                _last["picked_units"] = "mm w.e."
-
-                # single poly-fit (normal mode)
-                if ts_source_fit is not None:
-                    t_vals = s.index.to_pydatetime().tolist()
-                    y_vals = s.values.astype(float).tolist()
-                    if len(t_vals) >= fit_degree + 1:
-                        t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                        ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                    else:
-                        ts_source_fit.data = dict(t=[], y=[])
-
-                # yearly overlays / fits (if Yearly ON)
-                _maybe_update_yearly_overlays(
-                    kind="scalar",
-                    base_series_or_df=s,
-                    units_label="mm w.e.",
-                    title_prefix="Yearly",
-                )
-
-                w_status.object = f"Selected glacier: **{name_used}** ({lon_click:.3f}, {lat_click:.3f})"
-                return
-
-            # 2) In the "normal" case (secondary axis available):
-            #    ALSO plot the underlying grid/dataset time series on the primary y-axis,
-            #    so both series are visible together.
-
+            # Additionally try to load the grid series at the clicked point,
+            # so both can be seen together on primary axis.
             try:
-                ts, meta = _extract_timeseries_grid(
+                ts_grid, meta_grid = _extract_timeseries_grid(
                     _last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click
                 )
             except Exception:
-                ts, meta = None, None
+                ts_grid, meta_grid = None, None
 
-            if ts is not None and len(ts) > 0 and meta is not None:
-                # --- apply daily hour filter from _last, if present (same logic as grid branch) ---
-                hs = _last.get("hour_start")
-                he = _last.get("hour_end")
-                if hs is not None and he is not None:
-                    if hasattr(hs, "time"):
-                        hs = hs.time()
-                    if hasattr(he, "time"):
-                        he = he.time()
-                    if hs > he:
-                        hs, he = he, hs
+            # Apply hours if we were able to extract a grid series
+            if ts_grid is not None and meta_grid is not None and len(ts_grid) > 0:
+                hours = _last.get("hours")
+                if w_stat_ndatapoints is not None:
+                    w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts_grid.shape[0]}"
 
-                    idx = pd.to_datetime(ts.index)
-                    mask = (idx.time >= hs) & (idx.time <= he)
-                    ts = ts.loc[mask]
-
-                print("FRITZ 1 size of the plotted data: ", ts.shape)
-                # Now behave like the normal grid branch for the primary axis,
-                # but keep glacier stats on the side.
-                if meta["kind"] == "scalar":
-                    print("FRITZ scalar size of the plotted data: ", ts.shape)
-                    set_timeseries(
-                        ts_source,
-                        ts,
-                        kind="scalar",
-                        units=meta.get("units", ""),
-                        title="Point time series",
-                        fig=ts_fig,
+                if meta_grid["kind"] == "scalar":
+                    ts_used, kind_used = _plot_scalar_branch(
+                        ts=ts_grid,
+                        units=meta_grid.get("units", ""),
+                        fit_degree=fit_degree,
+                        hours=hours,
+                        ts_source=ts_source,
+                        ts_source_fit=ts_source_fit,
+                        ts_fig=ts_fig,
+                        stat_panes=_stat_panes,
+                        yearly_enabled_widget=yearly_enabled_widget,
+                        yearly_window_widget=yearly_window_widget,
+                        year_fields=year_fields,
+                        alpha_widget=alpha_widget,
+                        ts_year_sources=ts_year_sources,
+                        ts_year_renderers=ts_year_renderers,
+                        ts_year_fit_sources=ts_year_fit_sources,
+                        ts_year_fit_renderers=ts_year_fit_renderers,
+                        ts_fig_dir=ts_fig_dir,
+                        ts_dir_year_sources=ts_dir_year_sources,
+                        ts_dir_year_renderers=ts_dir_year_renderers,
+                        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+                        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
                     )
-
-                    _last["picked_series"] = ts
-                    _last["picked_kind"] = "scalar"
-                    _last["picked_units"] = meta.get("units", "")
-
-                    # Poly-fit of the main (grid) series
-                    if ts_source_fit is not None:
-                        t_vals = ts.index.to_pydatetime().tolist()
-                        y_vals = ts.values.astype(float).tolist()
-                        if len(t_vals) >= fit_degree + 1:
-                            t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                            ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                        else:
-                            ts_source_fit.data = dict(t=[], y=[])
-
-                    # Yearly overlays use the grid series
-                    _maybe_update_yearly_overlays(
-                        kind="scalar",
-                        base_series_or_df=ts,
-                        units_label=meta.get("units", ""),
-                        title_prefix="Yearly",
-                    )
-
                 else:
-                    # uv / wind case
-                    spd = np.hypot(ts["u"].to_numpy(), ts["v"].to_numpy())
-                    # Keep glacier stats in the side panes, so do NOT call _show_stats(spd, ...)
-
-                    set_timeseries(
-                        ts_source,
-                        ts,
-                        kind="uv",
-                        units=meta.get("units", "m/s"),
-                        title="Wind speed (|u,v|)",
-                        fig=ts_fig,
+                    ts_used, kind_used = _plot_uv_branch(
+                        ts_uv=ts_grid,
+                        units=meta_grid.get("units", "m/s"),
+                        fit_degree=fit_degree,
+                        hours=hours,
+                        ts_source=ts_source,
+                        ts_source_fit=ts_source_fit,
+                        ts_source_dir=ts_source_dir,
+                        ts_source_dir_fit=ts_source_dir_fit,
+                        ts_fig=ts_fig,
+                        ts_fig_dir=ts_fig_dir,
+                        stat_panes=_stat_panes,
+                        yearly_enabled_widget=yearly_enabled_widget,
+                        yearly_window_widget=yearly_window_widget,
+                        year_fields=year_fields,
+                        alpha_widget=alpha_widget,
+                        ts_year_sources=ts_year_sources,
+                        ts_year_renderers=ts_year_renderers,
+                        ts_year_fit_sources=ts_year_fit_sources,
+                        ts_year_fit_renderers=ts_year_fit_renderers,
+                        ts_dir_year_sources=ts_dir_year_sources,
+                        ts_dir_year_renderers=ts_dir_year_renderers,
+                        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+                        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
                     )
 
-                    _last["picked_series"] = ts
-                    _last["picked_kind"] = "uv"
-                    _last["picked_units"] = meta.get("units", "m/s")
+                _last["picked_series"] = ts_used
+                _last["picked_kind"] = kind_used
+                _last["picked_units"] = meta_grid.get("units", "" if kind_used == "scalar" else "m/s")
 
-                    # Direction series and direction plot
-                    dir_deg = (270.0 - np.degrees(np.arctan2(ts["v"].to_numpy(), ts["u"].to_numpy()))) % 360.0
-                    dir_series = pd.Series(dir_deg, index=ts.index, name="dir")
-                    if ts_source_dir is not None:
-                        set_timeseries(
-                            ts_source_dir,
-                            dir_series,
-                            kind="scalar",
-                            units="°",
-                            title="Wind direction (from)",
-                            fig=ts_fig_dir,
-                        )
-
-                    # Poly-fit for direction
-                    if ts_source_dir_fit is not None:
-                        t_vals = dir_series.index.to_pydatetime().tolist()
-                        y_vals = dir_series.values.astype(float).tolist()
-                        if len(t_vals) >= fit_degree + 1:
-                            t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                            ts_source_dir_fit.data = dict(t=t_fit, y=y_fit)
-                        else:
-                            ts_source_dir_fit.data = dict(t=[], y=[])
-
-                    # Poly-fit for speed magnitude
-                    if ts_source_fit is not None:
-                        t_vals = ts.index.to_pydatetime().tolist()
-                        y_vals = spd.astype(float).tolist()
-                        if len(t_vals) >= fit_degree + 1:
-                            t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                            ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                        else:
-                            ts_source_fit.data = dict(t=[], y=[])
-
-                    # Yearly overlays based on the grid series (uv)
-                    _maybe_update_yearly_overlays(
-                        kind="uv",
-                        base_series_or_df=ts,
-                        units_label=meta.get("units", "m/s"),
-                        title_prefix="Yearly",
-                    )
-
-            else:
-                # If grid data can't be extracted, fall back to using the glacier series
-                # on the primary axis as before.
-                set_timeseries(
-                    ts_source,
-                    s,
-                    kind="scalar",
-                    units="mm w.e.",
-                    title=f"Glacier {name_used} — time series",
-                    fig=ts_fig,
-                )
-                _last["picked_series"] = s
-                _last["picked_kind"] = "scalar"
-                _last["picked_units"] = "mm w.e."
-
-                if ts_source_fit is not None:
-                    t_vals = s.index.to_pydatetime().tolist()
-                    y_vals = s.values.astype(float).tolist()
-                    if len(t_vals) >= fit_degree + 1:
-                        t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                        ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                    else:
-                        ts_source_fit.data = dict(t=[], y=[])
-
-                _maybe_update_yearly_overlays(
-                    kind="scalar",
-                    base_series_or_df=s,
-                    units_label="mm w.e.",
-                    title_prefix="Yearly",
-                )
-
+            # Status
             w_status.object = f"Selected glacier: **{name_used}** ({lon_click:.3f}, {lat_click:.3f})"
             return
 
-
-        # ------------------ grid branch (dataset) ------------------
+        # --- Normal grid branch ------------------------------------------------
         ts, meta = _extract_timeseries_grid(
             _last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click
         )
 
-        # --- apply daily hour filter from _last, if present ---
-        hs = _last.get("hour_start")
-        he = _last.get("hour_end")
-
-        if hs is not None and he is not None and len(ts) > 0:
-            # normalize to plain datetime.time
-            if hasattr(hs, "time"):
-                hs = hs.time()
-            if hasattr(he, "time"):
-                he = he.time()
-            if hs > he:
-                hs, he = he, hs
-
-            idx = pd.to_datetime(ts.index)
-            mask = (idx.time >= hs) & (idx.time <= he)
-
-            # ts is a Series for scalar, DataFrame for uv; boolean mask works for both
-            ts = ts.loc[mask]
-
-            num_pts = ts.shape[0]
-            if w_stat_ndatapoints is not None:
-                w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {num_pts}"
-
+        hours = _last.get("hours")
+        if w_stat_ndatapoints is not None:
+            w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts.shape[0]}"
 
         if meta["kind"] == "scalar":
-            #print("FRITZ_11 ts type: ", type(ts))
-            #print("FRITZ_12 ts: ", ts.shape[0])
-            # Number of datapoints
-            #num_pts = ts.shape[0]
-            #if w_stat_ndatapoints is not None:
-            #    w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {num_pts}"
-
-            _show_stats(ts.values, meta.get("units", ""), _stat_panes)
-            set_timeseries(
-                ts_source,
-                ts,
-                kind="scalar",
+            ts_used, kind_used = _plot_scalar_branch(
+                ts=ts,
                 units=meta.get("units", ""),
-                title="Point time series",
-                fig=ts_fig,
+                fit_degree=fit_degree,
+                hours=hours,
+                ts_source=ts_source,
+                ts_source_fit=ts_source_fit,
+                ts_fig=ts_fig,
+                stat_panes=_stat_panes,
+                yearly_enabled_widget=yearly_enabled_widget,
+                yearly_window_widget=yearly_window_widget,
+                year_fields=year_fields,
+                alpha_widget=alpha_widget,
+                ts_year_sources=ts_year_sources,
+                ts_year_renderers=ts_year_renderers,
+                ts_year_fit_sources=ts_year_fit_sources,
+                ts_year_fit_renderers=ts_year_fit_renderers,
+                ts_fig_dir=ts_fig_dir,
+                ts_dir_year_sources=ts_dir_year_sources,
+                ts_dir_year_renderers=ts_dir_year_renderers,
+                ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
             )
-
-            # single poly-fit (normal mode)
-            if ts_source_fit is not None:
-                t_vals = ts.index.to_pydatetime().tolist()
-                y_vals = ts.values.astype(float).tolist()
-                if len(t_vals) >= fit_degree + 1:
-                    t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                    ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                else:
-                    ts_source_fit.data = dict(t=[], y=[])
-
-            # yearly overlays / fits (if Yearly ON)
-            _maybe_update_yearly_overlays(
-                kind="scalar",
-                base_series_or_df=ts,
-                units_label=meta.get("units", ""),
-                title_prefix="Yearly",
-            )
-
-            _last["picked_series"] = ts
-            _last["picked_kind"] = "scalar"
-            _last["picked_units"] = meta.get("units", "")
-
-
         else:
-            # uv/wind
-            spd = np.hypot(ts["u"].to_numpy(), ts["v"].to_numpy())
-            _show_stats(spd, meta.get("units", "m/s"), _stat_panes)
-            set_timeseries(
-                ts_source,
-                ts,
-                kind="uv",
+            ts_used, kind_used = _plot_uv_branch(
+                ts_uv=ts,
                 units=meta.get("units", "m/s"),
-                title="Wind speed (|u,v|)",
-                fig=ts_fig,
+                fit_degree=fit_degree,
+                hours=hours,
+                ts_source=ts_source,
+                ts_source_fit=ts_source_fit,
+                ts_source_dir=ts_source_dir,
+                ts_source_dir_fit=ts_source_dir_fit,
+                ts_fig=ts_fig,
+                ts_fig_dir=ts_fig_dir,
+                stat_panes=_stat_panes,
+                yearly_enabled_widget=yearly_enabled_widget,
+                yearly_window_widget=yearly_window_widget,
+                year_fields=year_fields,
+                alpha_widget=alpha_widget,
+                ts_year_sources=ts_year_sources,
+                ts_year_renderers=ts_year_renderers,
+                ts_year_fit_sources=ts_year_fit_sources,
+                ts_year_fit_renderers=ts_year_fit_renderers,
+                ts_dir_year_sources=ts_dir_year_sources,
+                ts_dir_year_renderers=ts_dir_year_renderers,
+                ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
             )
 
-            _last["picked_series"] = ts
-            _last["picked_kind"] = "uv"
-            _last["picked_units"] = meta.get("units", "m/s")
+        # Cache last pick for slider-driven updates
+        _last["picked_series"] = ts_used
+        _last["picked_kind"] = kind_used
+        _last["picked_units"] = meta.get("units", "" if kind_used == "scalar" else "m/s")
 
-
-            # Direction series (0..360) and raw direction plot
-            dir_deg = (270.0 - np.degrees(np.arctan2(ts["v"].to_numpy(), ts["u"].to_numpy()))) % 360.0
-            dir_series = pd.Series(dir_deg, index=ts.index, name="dir")
-            if ts_source_dir is not None:
-                set_timeseries(
-                    ts_source_dir,
-                    dir_series,
-                    kind="scalar",
-                    units="°",
-                    title="Wind direction (from)",
-                    fig=ts_fig_dir,
-                )
-
-            # poly-fit for direction
-            if ts_source_dir_fit is not None:
-                t_vals = dir_series.index.to_pydatetime().tolist()
-                y_vals = dir_series.values.astype(float).tolist()
-                if len(t_vals) >= fit_degree + 1:
-                    t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                    ts_source_dir_fit.data = dict(t=t_fit, y=y_fit)
-                else:
-                    ts_source_dir_fit.data = dict(t=[], y=[])
-
-            # poly-fit for speed magnitude (Observed fit in normal mode)
-            if ts_source_fit is not None:
-                t_vals = ts.index.to_pydatetime().tolist()
-                y_vals = spd.astype(float).tolist()
-                if len(t_vals) >= fit_degree + 1:
-                    t_fit, y_fit = poly_fit_datetime(t_vals, y_vals, degree=fit_degree, points=400)
-                    ts_source_fit.data = dict(t=t_fit, y=y_fit)
-                else:
-                    ts_source_fit.data = dict(t=[], y=[])
-
-            # yearly overlays / fits (if Yearly ON)
-            _maybe_update_yearly_overlays(
-                kind="uv",
-                base_series_or_df=ts,
-                units_label=meta.get("units", "m/s"),
-                title_prefix="Yearly",
-            )
-
+        # Final status
         w_status.object = f"Picked grid point at ({lon_click:.3f}, {lat_click:.3f})."
 
     except Exception as ex:

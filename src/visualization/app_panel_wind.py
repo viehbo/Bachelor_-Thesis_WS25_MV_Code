@@ -122,17 +122,15 @@ w_yearly_timerange = pn.widgets.DatetimeRangeSlider(
 
 
 
-w_hour_start = pn.widgets.TimePicker(
-    name="Daily start time",
-    value=time(0, 0),
-    width=150
+# Hours-of-day filter (populated from the selected files)
+w_hours = pn.widgets.MultiChoice(
+    name="Daily hours",
+    options=[],           # filled by load_time_range()
+    value=[],             # default -> all (we'll set in load_time_range)
+    solid=True,
+    width=300,
 )
 
-w_hour_end = pn.widgets.TimePicker(
-    name="Daily end time",
-    value=time(23, 59),
-    width=150
-)
 
 
 
@@ -266,10 +264,12 @@ w_dataset.param.watch(lambda e: on_dataset_change(), 'value')
 #
 # comment the scan button
 # w_scan.on_click(lambda e: scan_files(w_data_dir, w_pattern, w_files, w_status))
-w_loadtime.on_click(lambda e: load_time_range(w_files, w_status, w_timerange))
+w_loadtime.on_click(lambda e: load_time_range(
+    w_files, w_status, w_timerange, w_hours
+))
+
 w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
-                                      w_hour_start=w_hour_start,
-                                      w_hour_end=w_hour_end,
+                                      w_hours=w_hours,
                                       w_files=w_files,
                                       w_status=w_status,
                                       w_dataset=w_dataset,
@@ -345,7 +345,7 @@ controls = pn.Column(
 
     # w_timerange,
 
-    pn.Row(w_hour_start, w_hour_end),
+    pn.Row(w_hours),
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
 
