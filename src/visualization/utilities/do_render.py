@@ -68,7 +68,7 @@ def do_render(w_timerange,
         label_base = DATASETS[w_dataset.value]["label"]
         label = f"{label_base} [{units}]" if units else label_base
         title = f"{label_base} — {len(selected)} file(s)"
-        mode = DATASETS[w_dataset.value]["mode"]
+        mode = _last.get("data_kind") or DATASETS[w_dataset.value]["mode"]
 
         # Show direction plot only for wind (uv)
         if ts_pane_dir is not None:

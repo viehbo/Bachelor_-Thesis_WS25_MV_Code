@@ -37,7 +37,8 @@ def _to_py_naive(dt_any):
     return ts.to_pydatetime()
 
 
-def load_time_range(w_files, w_status, w_timerange, w_hours=None):
+def load_time_range(w_files, w_status, w_timerange, w_hours=None, *, w_files_summary=None, state=None):
+
     """
     Load global time range and populate available hours from the selected files.
     Uses a tolerant multi-file open: combine='by_coords', join='outer'.
@@ -47,6 +48,32 @@ def load_time_range(w_files, w_status, w_timerange, w_hours=None):
         paths = [Path(p) for p in w_files.value]
         if not paths:
             w_status.object = "**No files selected.**"
+            return
+
+        from src.visualization.helpers.detect_netcdf_kind import detect_kind_for_files
+
+        paths = [Path(p) for p in w_files.value]
+        if not paths:
+            w_status.object = "**No files selected.**"
+            if w_files_summary is not None:
+                w_files_summary.object = "**Files:** 0 — **Type:** –"
+            if state is not None:
+                state["data_kind"] = None
+            return
+
+        # validate kind consistency
+        try:
+            kind, _ = detect_kind_for_files(paths)
+            if w_files_summary is not None:
+                w_files_summary.object = f"**Files:** {len(paths)} — **Type:** {kind}"
+            if state is not None:
+                state["data_kind"] = kind
+        except Exception as e:
+            w_status.object = f"**Error:** {e}"
+            if w_files_summary is not None:
+                w_files_summary.object = f"**Files:** {len(paths)} — **Type:** (error)"
+            if state is not None:
+                state["data_kind"] = None
             return
 
         # Robust open across files with differing time stamps

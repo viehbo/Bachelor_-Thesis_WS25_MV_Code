@@ -14,6 +14,8 @@ import panel.util as _pn_util
 from panel.widgets.slider import DatetimeRangeSlider
 from bokeh.models import Range1d, LinearAxis, ColumnDataSource
 
+from pathlib import Path
+from src.visualization.helpers.detect_netcdf_kind import detect_kind_for_files
 
 
 from src.visualization.utilities.set_datetime import safe_value_as_datetime
@@ -71,6 +73,10 @@ w_pick_files = pn.widgets.Button(name="Select .nc files (OS)", button_type="prim
 w_clear_files = pn.widgets.Button(name="Clear selection", button_type="light")
 
 w_files    = pn.widgets.MultiSelect(name="NetCDF files", options=[], size=12)
+w_files_summary = pn.pane.Markdown("**Files:** 0 — **Type:** –", height=30)
+w_files.visible = False  # keep it for storage, but do not show it
+
+
 w_loadtime = pn.widgets.Button(name="Load files and timerange")
 # text fields for the click event
 w_stat_mean = pn.pane.Markdown("**Mean:** –", height=30)
@@ -266,7 +272,6 @@ w_yearly_mode.param.watch(lambda e: toggle_yearly_visibility(w_yearly_mode=w_yea
 
 
 def on_pick_files(event=None):
-    # Use the dataset dir as a helpful starting folder
     cfg = DATASETS[w_dataset.value]
     initial_dir = str(cfg["dir"])
 
@@ -280,13 +285,23 @@ def on_pick_files(event=None):
         w_status.object = "No files selected."
         return
 
-    # Populate MultiSelect
     w_files.options = paths
     w_files.value = list(paths)
 
-    w_status.object = (
-        f"Selected {len(paths)} file(s). Click **Load files and timerange** → **Render**."
-    )
+    # NEW: detect kind + update summary (simple, immediate feedback)
+    try:
+        kind, _ = detect_kind_for_files([Path(p) for p in w_files.value])
+        w_files_summary.object = f"**Files:** {len(paths)} — **Type:** {kind}"
+        _last["data_kind"] = kind
+    except Exception as e:
+        # Keep selection, but show error and mark kind unknown
+        _last["data_kind"] = None
+        w_files_summary.object = f"**Files:** {len(paths)} — **Type:** (error)"
+        w_status.object = f"**Error:** {e}"
+        return
+
+    w_status.object = f"Selected {len(paths)} file(s). Click **Load files and timerange** → **Render**."
+
 
 
 w_pick_files.on_click(on_pick_files)
@@ -294,7 +309,10 @@ w_pick_files.on_click(on_pick_files)
 def on_clear_files(event=None):
     w_files.options = []
     w_files.value = []
+    w_files_summary.object = "**Files:** 0 — **Type:** –"
+    _last["data_kind"] = None
     w_status.object = "Cleared file selection."
+
 
 w_clear_files.on_click(on_clear_files)
 
@@ -336,8 +354,11 @@ w_dataset.param.watch(lambda e: on_dataset_change(), 'value')
 # comment the scan button
 # w_scan.on_click(lambda e: scan_files(w_data_dir, w_pattern, w_files, w_status))
 w_loadtime.on_click(lambda e: load_time_range(
-    w_files, w_status, w_timerange, w_hours
+    w_files, w_status, w_timerange, w_hours,
+    w_files_summary=w_files_summary,
+    state=_last,
 ))
+
 
 w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       w_hours=w_hours,
@@ -417,7 +438,7 @@ glacier_slider_col = pn.Column(
 
 
 controls = pn.Column(
-    pn.Row(w_files),
+    #pn.Row(w_files),
     pn.Row(w_hours),
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
@@ -436,10 +457,10 @@ controls = pn.Column(
 
 
 top_section_controls = pn.Column(
-    pn.Row(w_dataset),
-    pn.Row(w_pick_files, w_clear_files, w_loadtime),
-    width=420,
+    #pn.Row(w_dataset),
+    pn.Row(w_pick_files, w_files_summary, w_loadtime, w_clear_files),
 )
+
 
 glacier_slider_left = pn.Column(
     "Glacier overlay",
