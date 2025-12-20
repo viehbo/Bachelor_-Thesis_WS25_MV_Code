@@ -30,7 +30,8 @@ from src.visualization.helpers.glacier_secondary_axis import (
 from src.visualization.core.poly_fit import poly_fit_datetime
 
 from src.visualization.helpers.apply_alpha_to_raw_lines import apply_alpha_to_raw_lines
-from src.visualization.helpers.update_poly_fit_only import update_poly_fit_only
+from src.visualization.helpers.update_trend_only import update_trend_only
+
 from src.visualization.helpers.populate_year_options_from_timerange import populate_year_options_from_timerange
 
 from src.visualization.plots.toggle_yearly_visibility import toggle_yearly_visibility
@@ -168,10 +169,60 @@ w_glacier_offset = pn.widgets.FloatSlider(
 
 
 w_render = pn.widgets.Button(name="Render", button_type="success")
-w_set_poly = pn.widgets.Button(name="set ploy degree", button_type="primary", button_style="outline")
+w_set_poly = pn.widgets.Button(name="Set trend", button_type="primary", button_style="outline")
 w_status = pn.pane.Markdown("", height=40)
 w_citetext = pn.pane.Markdown("Cite of the ECMWF", height=40)
 w_sampletext = pn.pane.Markdown("Sampletext", height=60)
+
+_last = {
+    "files": [],
+    "ds_key": None,
+    "time_range": None,
+    "lon": None,
+    "lat": None,
+    "figure": None,
+    "glaciers": None,
+}
+
+TREND_METHODS = {
+    "Polyfit": "polyfit",
+    "Rolling mean": "rolling_mean",
+    "EWMA": "ewma",
+    "Annual linear": "annual_linear",
+}
+
+
+# --- Trend method selection (glacier) ---
+w_trend_method_glacier = pn.widgets.Select(
+    name="Trend method (glacier)",
+    options=TREND_METHODS,
+    value="annual_linear",
+    width=220,
+)
+
+w_trend_param_glacier = pn.widgets.IntInput(
+    name="Trend parameter (glacier)",
+    value=5,
+    start=2,
+    end=50,
+    width=220,
+)
+
+w_pre_smooth_enabled_glacier = pn.widgets.Checkbox(
+    name="Pre-smooth glacier",
+    value=False,
+)
+
+w_pre_smooth_window_days_glacier = pn.widgets.IntInput(
+    name="Pre-smooth glacier window (days)",
+    value=365,
+    start=1,
+    end=3650,
+    width=220,
+)
+
+
+
 
 # Map pane: will be set in do_render()
 plot_pane = pn.pane.Bokeh(sizing_mode="stretch_width")
@@ -187,6 +238,9 @@ ts_fig.sizing_mode = "stretch_width"
 
 # --- Glacier secondary axis + line (always on main figure) ---
 ts_glacier_source = ColumnDataSource(dict(t=[], y=[]))
+ts_glacier_source_fit = ColumnDataSource(dict(t=[], y=[]))
+
+
 
 # Extra y-range for glacier mass balance
 ts_fig.extra_y_ranges["glacier"] = Range1d(start=0, end=1)
@@ -211,6 +265,19 @@ ts_glacier_line = ts_fig.line(
 )
 
 
+ts_glacier_fit_line = ts_fig.line(
+    x="t",
+    y="y",
+    source=ts_glacier_source_fit,
+    line_width=3,
+    line_alpha=0.95,
+    line_color="darkred",
+    y_range_name="glacier",
+    legend_label="Glacier trend",
+)
+
+
+
 
 # Direction plot
 (ts_fig_dir, ts_source_dir, ts_source_dir_fit,
@@ -218,6 +285,63 @@ ts_glacier_line = ts_fig.line(
  ts_dir_year_fit_sources, ts_dir_year_fit_renderers) = make_line_plot_1(
     show_fit=True, y_label="Direction (°)", x_range=ts_fig.x_range
 )
+
+
+
+
+# --- Trend method selection (climate: wind/temp) ---
+
+
+w_trend_method_climate = pn.widgets.Select(
+    name="Trend method (wind/temp)",
+    options=TREND_METHODS,
+    value="polyfit",
+    width=220,
+)
+
+w_trend_param_climate = pn.widgets.IntInput(
+    name="Trend parameter",
+    value=3,
+    start=1,
+    end=3650,
+    width=220,
+)
+
+w_pre_smooth_enabled_climate = pn.widgets.Checkbox(
+    name="Pre-smooth (moving avg)",
+    value=False,
+)
+
+w_pre_smooth_window_days_climate = pn.widgets.IntInput(
+    name="Pre-smooth window (days)",
+    value=30,
+    start=1,
+    end=3650,
+    width=220,
+)
+
+
+
+def _update_trend_param_label(event=None):
+    m = w_trend_method_climate.value
+    if m == "polyfit":
+        w_trend_param_climate.name = "Poly degree"
+        w_trend_param_climate.start, w_trend_param_climate.end = 1, 10
+    elif m == "rolling_mean":
+        w_trend_param_climate.name = "Window (days)"
+        w_trend_param_climate.start, w_trend_param_climate.end = 1, 3650
+    elif m == "ewma":
+        w_trend_param_climate.name = "Span (days)"
+        w_trend_param_climate.start, w_trend_param_climate.end = 1, 3650
+    elif m == "annual_linear":
+        w_trend_param_climate.name = "Min years"
+        w_trend_param_climate.start, w_trend_param_climate.end = 2, 50
+
+w_trend_method_climate.param.watch(lambda e: _update_trend_param_label(), "value")
+_update_trend_param_label()
+
+
+
 
 
 w_yearly_timerange.param.watch(
@@ -239,6 +363,11 @@ w_yearly_timerange.param.watch(
         ts_dir_year_fit_sources=ts_dir_year_fit_sources,
         ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
         w_fit_degree=w_fit_degree,
+        w_trend_method_climate=w_trend_method_climate,
+        w_trend_param_climate=w_trend_param_climate,
+        w_pre_smooth_enabled_climate=w_pre_smooth_enabled_climate,
+        w_pre_smooth_window_days_climate=w_pre_smooth_window_days_climate,
+
     ),
     "value",
 )
@@ -397,12 +526,28 @@ w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       ))
 
 # wire the button
-w_set_poly.on_click(lambda e: update_poly_fit_only(w_fit_degree=w_fit_degree,
-                                                   poly_fit_datetime=poly_fit_datetime,
-                                                   ts_source=ts_source,
-                                                   ts_source_fit=ts_source_fit,
-                                                   ts_source_dir=ts_source_dir,
-                                                   ts_source_dir_fit=ts_source_dir_fit, ))
+def on_set_trend(event=None):
+    update_trend_only(
+        w_trend_method_climate=w_trend_method_climate,
+        w_trend_param_climate=w_trend_param_climate,
+        w_pre_smooth_enabled_climate=w_pre_smooth_enabled_climate,
+        w_pre_smooth_window_days_climate=w_pre_smooth_window_days_climate,
+
+        w_trend_method_glacier=w_trend_method_glacier,
+        w_trend_param_glacier=w_trend_param_glacier,
+        w_pre_smooth_enabled_glacier=w_pre_smooth_enabled_glacier,
+        w_pre_smooth_window_days_glacier=w_pre_smooth_window_days_glacier,
+
+        ts_source=ts_source,
+        ts_source_fit=ts_source_fit,
+        ts_source_dir=ts_source_dir,
+        ts_source_dir_fit=ts_source_dir_fit,
+        ts_glacier_source=ts_glacier_source,
+        ts_glacier_source_fit=ts_glacier_source_fit,
+    )
+
+w_set_poly.on_click(on_set_trend)
+
 
 w_set_alpha.on_click(lambda e: apply_alpha_to_raw_lines(w_alpha_value=w_alpha_value,
                                                         ts_fig=ts_fig,
@@ -417,15 +562,12 @@ w_timerange.param.watch(lambda e: populate_year_options_from_timerange(w_timeran
 # call dataset change
 on_dataset_change()
 
-_last = {
-    "files": [],
-    "ds_key": None,
-    "time_range": None,
-    "lon": None,   # 1D lon centers
-    "lat": None,   # 1D lat centers
-    "figure": None,
-    "glaciers": None,  # cached glacier points for click-near-glacier
-}
+
+
+
+
+
+
 
 
 
@@ -443,6 +585,13 @@ controls = pn.Column(
     pn.Row(w_hours),
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
+    pn.Spacer(height=10),
+    pn.pane.Markdown("### Glacier trend"),
+    pn.Row(w_trend_method_climate),
+    pn.Row(w_trend_param_climate),
+    pn.Row(w_pre_smooth_enabled_climate),
+    pn.Row(w_pre_smooth_window_days_climate),
+
     pn.Row(w_yearly_mode),
     w_yearly_timerange,
     w_years,

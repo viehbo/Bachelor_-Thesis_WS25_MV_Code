@@ -9,6 +9,8 @@ from bokeh.palettes import Category10
 from src.visualization.helpers.normalize_to_dummy_year import _normalize_to_dummy_year
 from src.visualization.helpers.slice_series_by_year import slice_series_by_year
 from src.visualization.core.poly_fit import poly_fit_datetime
+from src.visualization.utilities.trend_methods import TrendConfig, compute_trend_line
+
 
 # Import new utilities
 from src.visualization.utilities.bokeh_utils import (
@@ -171,8 +173,14 @@ def _setup_fit_overlay(
         series: pd.Series,
         fit_degree: int,
         color: str,
-        label: str
+        label: str,
+        *,
+        trend_method: str,
+        trend_param: int,
+        pre_smooth_enabled: bool,
+        pre_smooth_window_days: int,
 ):
+
     """
     Setup a polynomial fit overlay for a yearly series.
 
@@ -199,13 +207,17 @@ def _setup_fit_overlay(
             pass
         return
 
-    # Compute polynomial fit
-    t_fit, y_fit = poly_fit_datetime(
-        series.index,
-        series.values,
-        degree=int(fit_degree),
-        points="original"
+    cfg = TrendConfig(
+        method=str(trend_method),
+        pre_smooth_enabled=bool(pre_smooth_enabled),
+        pre_smooth_window_days=int(pre_smooth_window_days),
+        poly_degree=int(trend_param),
+        rolling_window_days=int(trend_param),
+        ewma_span_days=int(trend_param),
+        annual_min_years=int(trend_param),
     )
+
+    t_fit, y_fit = compute_trend_line(series.index, series.values, cfg)
 
     # Normalize to dummy year
     t_fit_norm = _normalize_to_dummy_year(t_fit)
@@ -241,6 +253,10 @@ def set_yearly_overlays(
         yearly_fit_sources: list,
         yearly_fit_renderers: list,
         fit_degree: int,
+        trend_method: str = "polyfit",
+        trend_param: int = 3,
+        pre_smooth_enabled: bool = False,
+        pre_smooth_window_days: int = 30,
         alpha: float = 0.35,
         units: str = "",
         title_prefix: str = "Yearly",

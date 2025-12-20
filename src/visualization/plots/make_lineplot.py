@@ -42,7 +42,7 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
                  line_alpha=1,
                  line_color='black',
                  #line_dash="solid",
-                 legend_label="Poly fit",
+                 legend_label="Trend",
                  )
 
     hover = HoverTool(

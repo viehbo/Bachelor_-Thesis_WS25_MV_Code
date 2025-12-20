@@ -25,7 +25,13 @@ def _on_yearly_timerange_change(
     ts_dir_year_fit_sources,
     ts_dir_year_fit_renderers,
     w_fit_degree,
+    # NEW:
+    w_trend_method_climate,
+    w_trend_param_climate,
+    w_pre_smooth_enabled_climate,
+    w_pre_smooth_window_days_climate,
 ):
+
     """
     Recompute yearly overlays when the yearly timeframe slider changes,
     using the last picked series cached in `_last`.
@@ -48,6 +54,12 @@ def _on_yearly_timerange_change(
     alpha = float(w_alpha_value.value or 0.35)
     fit_degree = int(w_fit_degree.value)
 
+    trend_method = str(w_trend_method_climate.value)
+    trend_param = int(w_trend_param_climate.value)
+    pre_smooth_enabled = bool(w_pre_smooth_enabled_climate.value)
+    pre_smooth_window_days = int(w_pre_smooth_window_days_climate.value)
+
+
     # --- Main overlays ---
     set_yearly_overlays(
         ts_fig,
@@ -63,6 +75,11 @@ def _on_yearly_timerange_change(
         units=units,
         title_prefix="Yearly overlays",
         dummy_range=yearly_window,
+        trend_method=trend_method,
+        trend_param=trend_param,
+        pre_smooth_enabled=pre_smooth_enabled,
+        pre_smooth_window_days=pre_smooth_window_days,
+
     )
 
     # --- Direction overlays for UV ---
@@ -83,6 +100,11 @@ def _on_yearly_timerange_change(
             units="°",
             title_prefix="Yearly (direction)",
             dummy_range=yearly_window,
+            trend_method=trend_method,
+            trend_param=trend_param,
+            pre_smooth_enabled=pre_smooth_enabled,
+            pre_smooth_window_days=pre_smooth_window_days,
+
         )
 
     # Keep x-ranges locked to dummy year
