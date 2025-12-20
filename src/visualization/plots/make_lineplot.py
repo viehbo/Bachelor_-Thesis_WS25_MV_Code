@@ -7,7 +7,8 @@ from bokeh.palettes import Category10
 
 PALETTE10 = list(Category10[10])
 
-def make_line_plot_1(title="Clicked point: time series", y_label="", show_fit=True, x_range=None):
+def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Time", show_fit=True, x_range=None):
+
     kwargs = dict(height=260,
                   width=900,
                   x_axis_type="datetime",
@@ -54,6 +55,8 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", show_fit=Tr
 
     fig.title.text = title
     fig.yaxis.axis_label = y_label
+    fig.xaxis.axis_label = x_label
+
     fig.legend.click_policy = "hide"
     fig.xaxis.formatter = DatetimeTickFormatter(hours="%Y-%m-%d %H:%M", days="%Y-%m-%d")
 

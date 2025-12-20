@@ -294,6 +294,7 @@ def on_pick_files(event=None):
         w_files_summary.object = f"**Files:** {len(paths)} — **Type:** {kind}"
         _last["data_kind"] = kind
     except Exception as e:
+        print(e)
         # Keep selection, but show error and mark kind unknown
         _last["data_kind"] = None
         w_files_summary.object = f"**Files:** {len(paths)} — **Type:** (error)"

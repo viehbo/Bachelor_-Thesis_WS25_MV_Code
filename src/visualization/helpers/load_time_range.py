@@ -69,6 +69,7 @@ def load_time_range(w_files, w_status, w_timerange, w_hours=None, *, w_files_sum
             if state is not None:
                 state["data_kind"] = kind
         except Exception as e:
+            print("Error 3: ", e)
             w_status.object = f"**Error:** {e}"
             if w_files_summary is not None:
                 w_files_summary.object = f"**Files:** {len(paths)} — **Type:** (error)"
@@ -106,4 +107,5 @@ def load_time_range(w_files, w_status, w_timerange, w_hours=None, *, w_files_sum
 
         w_status.object = "Loaded time range and hours."
     except Exception as e:
+        print("Error 2: ", e)
         w_status.object = f"**Error:** {e}"

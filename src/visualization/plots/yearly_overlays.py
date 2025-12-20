@@ -339,8 +339,12 @@ def set_yearly_overlays(
         _setup_fit_overlay(fit_src, fit_rnd, s_window, fit_degree, color, label)
 
     # Update figure cosmetics
-    if units:
-        set_figure_axes_labels(fig, y_label=units)
+    xlab = "Day of year (dummy year)"
+    ylab = units  # bei dir ist units bereits ein Label-String
+    if ylab:
+        set_figure_axes_labels(fig, x_label=xlab, y_label=ylab)
+    else:
+        set_figure_axes_labels(fig, x_label=xlab)
 
     if title_prefix:
         selected_count = len(valid_years)

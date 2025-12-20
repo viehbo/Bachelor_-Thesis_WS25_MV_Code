@@ -86,6 +86,9 @@ def make_wind_plot(
         title=title,
         tools="pan,wheel_zoom,reset,save,tap",
     )
+    p.xaxis.axis_label = "WebMercator X (m)"
+    p.yaxis.axis_label = "WebMercator Y (m)"
+
     add_tiles(p)
 
     # Arrow geometry in meters; length scales with vector magnitude (u,v)
@@ -142,7 +145,8 @@ def make_wind_plot(
         color_mapper=mapper,
         label_standoff=8,
         location=(0, 0),
-        title=cbar_label or "Wind speed",
+        title=cbar_label or "Wind speed (m/s)",
+
     )
     p.add_layout(color_bar, "right")
 

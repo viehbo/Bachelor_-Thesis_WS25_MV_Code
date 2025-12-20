@@ -57,11 +57,14 @@ def do_render(w_timerange,
             # values are strings like "00", convert to ints
             hour_list = sorted({int(h) for h in w_hours.value})
 
+        mode = _last.get("data_kind") or DATASETS[w_dataset.value]["mode"]
+
         avg2d, extent, units, lon, lat, u2d, v2d = compute_average(
             DATASETS,
             selected,
             w_dataset.value,
-            t_val,
+            mode,  # ✅ pass detected type (wind/temperature/glacier)
+            t_val,  # ✅ t_range argument
             hours=hour_list,
         )
 
@@ -136,4 +139,5 @@ def do_render(w_timerange,
 
 
     except Exception as e:
+        print("Error 1: ", e)
         w_status.object = f"**Error:** {e}"

@@ -7,9 +7,11 @@ from __future__ import annotations
 from math import pi
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 from datetime import datetime as _dt
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from src.visualization.helpers.mercator_transformer import y_to_lat, x_to_lon
 from src.visualization.helpers.set_timeseries import set_timeseries
@@ -23,7 +25,7 @@ from src.visualization.helpers.glacier_secondary_axis import (
 )
 from src.visualization.helpers.wind_direction import compute_wind_direction_deg_from_uv
 
-# Import new utilities
+# Utilities
 from src.visualization.utilities.bokeh_utils import (
     clear_and_hide_pairs,
     update_timeseries_source,
@@ -37,6 +39,10 @@ R = 6378137.0  # WebMercator Earth radius (meters)
 _DUMMY_START = _dt(2000, 1, 1)
 _DUMMY_END = _dt(2000, 12, 31, 23, 59, 59)
 
+
+# -----------------------------------------------------------------------------
+# small helpers
+# -----------------------------------------------------------------------------
 
 def _show_stats(values: Union[np.ndarray, Iterable[float]], unit: str, panes: Dict[str, object]) -> None:
     """Update statistics panes (mean, max, min)."""
@@ -121,6 +127,185 @@ def _lock_x_range_to_dummy_year(ts_fig, ts_fig_dir=None):
         pass
 
 
+# -----------------------------------------------------------------------------
+# robust time series extraction (fallback-safe)
+# -----------------------------------------------------------------------------
+
+_WIND_U_CANDS = ("u", "u10", "10u", "u_component_of_wind", "eastward_wind")
+_WIND_V_CANDS = ("v", "v10", "10v", "v_component_of_wind", "northward_wind")
+_TEMP_CANDS = ("temperature_2m", "t2m", "2t", "tas", "temperature", "air_temperature", "temp")
+
+
+def _pick_first_data_var(ds: xr.Dataset, candidates: Tuple[str, ...]) -> Optional[str]:
+    dv = {k.lower(): k for k in ds.data_vars.keys()}
+    for c in candidates:
+        if c.lower() in dv:
+            return dv[c.lower()]
+    return None
+
+
+def _guess_lon_lat_names(ds: xr.Dataset) -> Tuple[str, str]:
+    """
+    Try to find lon/lat variable/coord names in a dataset.
+    Prefers common conventions.
+    """
+    # Prefer coordinates if present
+    all_names = set(ds.coords.keys()) | set(ds.variables.keys())
+
+    lon_priority = ("longitude", "lon", "x")
+    lat_priority = ("latitude", "lat", "y")
+
+    lon_name = next((n for n in lon_priority if n in all_names), None)
+    lat_name = next((n for n in lat_priority if n in all_names), None)
+
+    if lon_name is None or lat_name is None:
+        raise ValueError(f"Could not find lon/lat names. Available: {sorted(all_names)}")
+
+    return lon_name, lat_name
+
+
+def _guess_time_name(ds: xr.Dataset) -> str:
+    """
+    Find a time-like coordinate name.
+    """
+    candidates = ("time", "valid_time")
+    for c in candidates:
+        if c in ds.coords or c in ds.variables:
+            return c
+    # last resort: any coordinate with datetime dtype
+    for n in ds.coords:
+        try:
+            if np.issubdtype(ds[n].dtype, np.datetime64):
+                return n
+        except Exception:
+            pass
+    raise ValueError("Could not find a time coordinate (e.g. 'time' or 'valid_time').")
+
+
+def _select_nearest_gridpoint(da: xr.DataArray, lon_name: str, lat_name: str, lon_click: float, lat_click: float) -> xr.DataArray:
+    """
+    Robust nearest selection for 1D or 2D lon/lat coordinate grids.
+    - If lon/lat are 1D coords: use .sel(method="nearest")
+    - If lon/lat are 2D coords: compute nearest index and .isel(...)
+    """
+    lon_obj = da[lon_name] if lon_name in da.coords or lon_name in da.data_vars else None
+    lat_obj = da[lat_name] if lat_name in da.coords or lat_name in da.data_vars else None
+
+    if lon_obj is None or lat_obj is None:
+        # If lon/lat not attached to the DataArray, try from parent dataset via da._to_dataset?
+        raise ValueError(f"lon/lat coordinates '{lon_name}/{lat_name}' are not available on the DataArray.")
+
+    lon_vals = lon_obj.values
+    lat_vals = lat_obj.values
+
+    # 1D grid (regular lon/lat)
+    if np.ndim(lon_vals) == 1 and np.ndim(lat_vals) == 1:
+        return da.sel({lon_name: lon_click, lat_name: lat_click}, method="nearest")
+
+    # 2D grid (curvilinear): nearest by brute force
+    if np.ndim(lon_vals) == 2 and np.ndim(lat_vals) == 2:
+        dist2 = (lon_vals - lon_click) ** 2 + (lat_vals - lat_click) ** 2
+        flat_i = int(np.nanargmin(dist2))
+        iy, ix = np.unravel_index(flat_i, dist2.shape)
+
+        # dims for lon/lat grid; typically ('y','x')
+        ydim, xdim = lon_obj.dims
+        return da.isel({ydim: iy, xdim: ix})
+
+    raise ValueError(f"Unsupported lon/lat grid dimensionality: lon.ndim={np.ndim(lon_vals)} lat.ndim={np.ndim(lat_vals)}")
+
+
+def _extract_timeseries_fallback(files: List[Path], mode: str, t_range, lon_click: float, lat_click: float):
+    """
+    Fallback extractor that does not depend on DATASETS config.
+    Returns:
+      - (pd.Series, meta) for scalar
+      - (pd.DataFrame(u,v), meta) for wind uv
+    """
+    if not files:
+        raise ValueError("No files loaded in _last['files'].")
+
+    with xr.open_mfdataset([str(p) for p in files], combine="by_coords", join="outer", parallel=False) as ds:
+        tname = _guess_time_name(ds)
+        lon_name, lat_name = _guess_lon_lat_names(ds)
+
+        # Optional time slicing
+        if t_range and all(t_range):
+            t0, t1 = t_range
+            ds = ds.sel({tname: slice(np.datetime64(pd.Timestamp(t0)), np.datetime64(pd.Timestamp(t1)))})
+
+        if mode == "wind":
+            u_name = _pick_first_data_var(ds, _WIND_U_CANDS)
+            v_name = _pick_first_data_var(ds, _WIND_V_CANDS)
+            if not u_name or not v_name:
+                raise ValueError(f"Wind mode but could not find u/v in data_vars={list(ds.data_vars)}")
+
+            da_u = ds[u_name]
+            da_v = ds[v_name]
+
+            # select point if spatial dims exist; otherwise accept as-is
+            if (lon_name in da_u.coords or lon_name in da_u.data_vars) and (lat_name in da_u.coords or lat_name in da_u.data_vars) and da_u.ndim > 1:
+                da_u = _select_nearest_gridpoint(da_u, lon_name, lat_name, lon_click, lat_click)
+                da_v = _select_nearest_gridpoint(da_v, lon_name, lat_name, lon_click, lat_click)
+
+            # Ensure we have a time series (time dimension present)
+            if tname not in da_u.dims:
+                raise ValueError(f"Selected wind u does not contain time dim '{tname}'. dims={da_u.dims}")
+            if tname not in da_v.dims:
+                raise ValueError(f"Selected wind v does not contain time dim '{tname}'. dims={da_v.dims}")
+
+            idx = pd.to_datetime(da_u[tname].values)
+            df = pd.DataFrame({"u": np.asarray(da_u.values).astype(float), "v": np.asarray(da_v.values).astype(float)}, index=idx)
+            meta = {"kind": "uv", "units": da_u.attrs.get("units", "m/s")}
+            return df, meta
+
+        if mode == "temperature":
+            x_name = _pick_first_data_var(ds, _TEMP_CANDS)
+            if not x_name:
+                raise ValueError(f"Temperature mode but could not find temp var in data_vars={list(ds.data_vars)}")
+
+            da = ds[x_name]
+
+            if (lon_name in da.coords or lon_name in da.data_vars) and (lat_name in da.coords or lat_name in da.data_vars) and da.ndim > 1:
+                da = _select_nearest_gridpoint(da, lon_name, lat_name, lon_click, lat_click)
+
+            if tname not in da.dims:
+                raise ValueError(f"Selected temperature variable does not contain time dim '{tname}'. dims={da.dims}")
+
+            idx = pd.to_datetime(da[tname].values)
+            s = pd.Series(np.asarray(da.values).astype(float), index=idx, name=x_name)
+            meta = {"kind": "scalar", "units": da.attrs.get("units", "")}
+            return s, meta
+
+        if mode == "glacier":
+            raise ValueError("Fallback extractor does not handle glacier time series here.")
+
+        raise ValueError(f"Unsupported mode for fallback extraction: {mode}")
+
+
+def _extract_timeseries_safe(files, ds_key, t_range, lon_click, lat_click, mode: str):
+    """
+    Try the existing extractor first; if it fails (common when switching datasets),
+    fall back to a robust xarray-based extractor.
+    """
+    try:
+        ts, meta = _extract_timeseries_grid(files, ds_key, t_range, lon_click, lat_click)
+        # sanity: ensure meta has kind
+        if meta is None or "kind" not in meta:
+            raise ValueError("Extractor returned invalid meta.")
+        return ts, meta
+    except Exception:
+        # fallback based on detected mode from files
+        if mode in ("wind", "temperature"):
+            return _extract_timeseries_fallback([Path(p) for p in files], mode, t_range, lon_click, lat_click)
+        # glacier handled elsewhere
+        raise
+
+
+# -----------------------------------------------------------------------------
+# plotting branches
+# -----------------------------------------------------------------------------
+
 def _update_yearly_overlays(*, yearly_enabled_widget, yearly_window_widget, year_fields, alpha_widget, fit_degree: int,
                             ts_fig, base_series_or_df, kind: str, units_label: str, title_prefix: str,
                             ts_year_sources, ts_year_renderers, ts_year_fit_sources, ts_year_fit_renderers,
@@ -140,19 +325,39 @@ def _update_yearly_overlays(*, yearly_enabled_widget, yearly_window_widget, year
     dummy_range = _get_dummy_range(yearly_window_widget)
     alpha = float(getattr(alpha_widget, "value", 0.35) or 0.35)
 
-    set_yearly_overlays(ts_fig, base_series_or_df, kind=kind, years=years_selected,
-                        yearly_sources=ts_year_sources, yearly_renderers=ts_year_renderers,
-                        yearly_fit_sources=ts_year_fit_sources, yearly_fit_renderers=ts_year_fit_renderers,
-                        fit_degree=int(fit_degree), alpha=alpha, units=units_label,
-                        title_prefix=title_prefix, dummy_range=dummy_range)
+    set_yearly_overlays(
+        ts_fig,
+        base_series_or_df,
+        kind=kind,
+        years=years_selected,
+        yearly_sources=ts_year_sources,
+        yearly_renderers=ts_year_renderers,
+        yearly_fit_sources=ts_year_fit_sources,
+        yearly_fit_renderers=ts_year_fit_renderers,
+        fit_degree=int(fit_degree),
+        alpha=alpha,
+        units=units_label,
+        title_prefix=title_prefix,
+        dummy_range=dummy_range,
+    )
 
     if ts_fig_dir is not None and ts_dir_year_sources and ts_dir_year_renderers:
         dir_series = compute_wind_direction_deg_from_uv(base_series_or_df) if kind == "uv" else base_series_or_df
-        set_yearly_overlays(ts_fig_dir, dir_series, kind="scalar", years=years_selected,
-                            yearly_sources=ts_dir_year_sources, yearly_renderers=ts_dir_year_renderers,
-                            yearly_fit_sources=ts_dir_year_fit_sources, yearly_fit_renderers=ts_dir_year_fit_renderers,
-                            fit_degree=int(fit_degree), alpha=alpha, units="°",
-                            title_prefix="Yearly (direction)", dummy_range=dummy_range)
+        set_yearly_overlays(
+            ts_fig_dir,
+            dir_series,
+            kind="scalar",
+            years=years_selected,
+            yearly_sources=ts_dir_year_sources,
+            yearly_renderers=ts_dir_year_renderers,
+            yearly_fit_sources=ts_dir_year_fit_sources,
+            yearly_fit_renderers=ts_dir_year_fit_renderers,
+            fit_degree=int(fit_degree),
+            alpha=alpha,
+            units="°",
+            title_prefix="Yearly (direction)",
+            dummy_range=dummy_range,
+        )
 
     _lock_x_range_to_dummy_year(ts_fig, ts_fig_dir)
 
@@ -172,26 +377,39 @@ def _plot_scalar_branch(*, ts, units, fit_degree, hours, ts_source, ts_source_fi
         _polyfit_and_update_source(ts_filtered.index, ts_filtered.values, fit_degree, ts_source_fit)
 
     if ts_fig is not None:
-        set_figure_axes_labels(ts_fig, y_label=units)
-        set_figure_title(ts_fig, f"Timeseries ({units})")
+        ylab = f"Value ({units})" if units else "Value"
+        set_figure_axes_labels(ts_fig, x_label="Time", y_label=ylab)
+        set_figure_title(ts_fig, ylab)
 
-    _update_yearly_overlays(yearly_enabled_widget=yearly_enabled_widget, yearly_window_widget=yearly_window_widget,
-                            year_fields=year_fields, alpha_widget=alpha_widget, fit_degree=fit_degree,
-                            ts_fig=ts_fig, base_series_or_df=ts_filtered, kind="scalar", units_label=units,
-                            title_prefix="Yearly", ts_year_sources=ts_year_sources, ts_year_renderers=ts_year_renderers,
-                            ts_year_fit_sources=ts_year_fit_sources, ts_year_fit_renderers=ts_year_fit_renderers,
-                            ts_fig_dir=ts_fig_dir, ts_dir_year_sources=ts_dir_year_sources,
-                            ts_dir_year_renderers=ts_dir_year_renderers,
-                            ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+    _update_yearly_overlays(
+        yearly_enabled_widget=yearly_enabled_widget,
+        yearly_window_widget=yearly_window_widget,
+        year_fields=year_fields,
+        alpha_widget=alpha_widget,
+        fit_degree=fit_degree,
+        ts_fig=ts_fig,
+        base_series_or_df=ts_filtered,
+        kind="scalar",
+        units_label=units,
+        title_prefix="Yearly",
+        ts_year_sources=ts_year_sources,
+        ts_year_renderers=ts_year_renderers,
+        ts_year_fit_sources=ts_year_fit_sources,
+        ts_year_fit_renderers=ts_year_fit_renderers,
+        ts_fig_dir=ts_fig_dir,
+        ts_dir_year_sources=ts_dir_year_sources,
+        ts_dir_year_renderers=ts_dir_year_renderers,
+        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+    )
 
     return ts_filtered, "scalar"
 
 
 def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit=None, ts_source_dir=None,
-                    ts_source_dir_fit=None, ts_fig=None, ts_fig_dir=None, stat_panes, yearly_enabled_widget=None,
-                    yearly_window_widget=None, year_fields=None, alpha_widget=None, ts_year_sources=None,
-                    ts_year_renderers=None, ts_year_fit_sources=None, ts_year_fit_renderers=None,
+                    ts_source_dir_fit=None, ts_fig=None, ts_fig_dir=None, stat_panes=None,
+                    yearly_enabled_widget=None, yearly_window_widget=None, year_fields=None, alpha_widget=None,
+                    ts_year_sources=None, ts_year_renderers=None, ts_year_fit_sources=None, ts_year_fit_renderers=None,
                     ts_dir_year_sources=None, ts_dir_year_renderers=None, ts_dir_year_fit_sources=None,
                     ts_dir_year_fit_renderers=None) -> Tuple[pd.DataFrame, str]:
     """Render UV wind data: speed on main plot, direction on direction plot."""
@@ -199,7 +417,7 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
     speed = np.hypot(df_filtered["u"].to_numpy(), df_filtered["v"].to_numpy())
 
     update_timeseries_source(ts_source, df_filtered.index, speed)
-    _show_stats(speed, units, stat_panes)
+    _show_stats(speed, units, stat_panes or {})
 
     if ts_source_fit is not None:
         _polyfit_and_update_source(df_filtered.index, speed, fit_degree, ts_source_fit)
@@ -211,24 +429,41 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
             _polyfit_and_update_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
 
     if ts_fig is not None:
-        set_figure_axes_labels(ts_fig, y_label=units)
-        set_figure_title(ts_fig, f"Speed ({units})")
-    if ts_fig_dir is not None:
-        set_figure_axes_labels(ts_fig_dir, y_label="Direction (°)")
-        set_figure_title(ts_fig_dir, "Direction (°)")
+        set_figure_axes_labels(ts_fig, x_label="Time", y_label=f"Wind speed ({units})")
+        set_figure_title(ts_fig, f"Wind speed ({units})")
 
-    _update_yearly_overlays(yearly_enabled_widget=yearly_enabled_widget, yearly_window_widget=yearly_window_widget,
-                            year_fields=year_fields, alpha_widget=alpha_widget, fit_degree=fit_degree,
-                            ts_fig=ts_fig, base_series_or_df=df_filtered, kind="uv", units_label=units,
-                            title_prefix="Yearly", ts_year_sources=ts_year_sources, ts_year_renderers=ts_year_renderers,
-                            ts_year_fit_sources=ts_year_fit_sources, ts_year_fit_renderers=ts_year_fit_renderers,
-                            ts_fig_dir=ts_fig_dir, ts_dir_year_sources=ts_dir_year_sources,
-                            ts_dir_year_renderers=ts_dir_year_renderers,
-                            ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+    if ts_fig_dir is not None:
+        set_figure_axes_labels(ts_fig_dir, x_label="Time", y_label="Wind direction (°)")
+        set_figure_title(ts_fig_dir, "Wind direction (°)")
+
+    _update_yearly_overlays(
+        yearly_enabled_widget=yearly_enabled_widget,
+        yearly_window_widget=yearly_window_widget,
+        year_fields=year_fields,
+        alpha_widget=alpha_widget,
+        fit_degree=fit_degree,
+        ts_fig=ts_fig,
+        base_series_or_df=df_filtered,
+        kind="uv",
+        units_label=units,
+        title_prefix="Yearly",
+        ts_year_sources=ts_year_sources,
+        ts_year_renderers=ts_year_renderers,
+        ts_year_fit_sources=ts_year_fit_sources,
+        ts_year_fit_renderers=ts_year_fit_renderers,
+        ts_fig_dir=ts_fig_dir,
+        ts_dir_year_sources=ts_dir_year_sources,
+        ts_dir_year_renderers=ts_dir_year_renderers,
+        ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+        ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+    )
 
     return df_filtered, "uv"
 
+
+# -----------------------------------------------------------------------------
+# click handlers
+# -----------------------------------------------------------------------------
 
 def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status, w_stat_ndatapoints,
                           w_glacier_multiplier, w_glacier_offset, ts_glacier_source, ts_fig, fit_degree,
@@ -255,16 +490,20 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
     _last["selected_glacier_name"] = str(glacier_name)
     _last["glacier_series_raw"] = s_glacier
 
+    # Try to overlay climate series as well (optional)
     try:
-        ts_grid, meta_grid = _extract_timeseries_grid(_last["files"], _last["ds_key"], _last["time_range"], lon_click,
-                                                      lat_click)
+        mode = _last.get("data_kind") or "temperature"
+        ts_grid, meta_grid = _extract_timeseries_safe(_last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click, mode=mode)
     except Exception:
         ts_grid, meta_grid = None, None
 
     if ts_grid is not None and meta_grid is not None and len(ts_grid) > 0:
         hours = _last.get("hours")
         if w_stat_ndatapoints is not None:
-            w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts_grid.shape[0]}"
+            try:
+                w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts_grid.shape[0]}"
+            except Exception:
+                pass
 
         if meta_grid["kind"] == "scalar":
             ts_used, kind_used = _plot_scalar_branch(
@@ -275,7 +514,8 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_fig_dir=ts_fig_dir,
                 ts_dir_year_sources=ts_dir_year_sources, ts_dir_year_renderers=ts_dir_year_renderers,
-                ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+                ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            )
         else:
             ts_used, kind_used = _plot_uv_branch(
                 ts_uv=ts_grid, units=meta_grid.get("units", "m/s"), fit_degree=fit_degree, hours=hours,
@@ -286,11 +526,15 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
                 ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            )
 
         _last["picked_series"] = ts_used
         _last["picked_kind"] = kind_used
         _last["picked_units"] = meta_grid.get("units", "" if kind_used == "scalar" else "m/s")
+
+        # IMPORTANT: keep set_timeseries signature satisfied if you want direct updates as well
+        set_timeseries(ts_source, ts_used, kind=kind_used)
 
     w_status.object = f"Selected glacier: **{glacier_name}** ({lon_click:.3f}, {lat_click:.3f})"
 
@@ -303,8 +547,10 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
                        ts_dir_year_renderers=None, ts_dir_year_fit_sources=None,
                        ts_dir_year_fit_renderers=None) -> None:
     """Handle click on a regular grid point."""
+    mode = _last.get("data_kind") or "temperature"
+
     try:
-        ts, meta = _extract_timeseries_grid(_last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click)
+        ts, meta = _extract_timeseries_safe(_last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click, mode=mode)
     except Exception as e:
         w_status.object = f"Tap failed: {e}"
         return
@@ -329,7 +575,8 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
             ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
             ts_year_fit_renderers=ts_year_fit_renderers, ts_fig_dir=ts_fig_dir,
             ts_dir_year_sources=ts_dir_year_sources, ts_dir_year_renderers=ts_dir_year_renderers,
-            ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+            ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+        )
     else:
         ts_used, kind_used = _plot_uv_branch(
             ts_uv=ts, units=meta.get("units", "m/s"), fit_degree=fit_degree, hours=hours,
@@ -340,14 +587,17 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
             ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
             ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
             ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+        )
 
     _last["picked_series"] = ts_used
     _last["picked_kind"] = kind_used
     _last["picked_units"] = meta.get("units", "" if kind_used == "scalar" else "m/s")
 
     w_status.object = f"Selected grid point ({lon_click:.3f}, {lat_click:.3f})"
-    set_timeseries(ts_source, ts_used)
+
+    # IMPORTANT: set_timeseries requires keyword-only 'kind'
+    set_timeseries(ts_source, ts_used, kind=kind_used)
 
 
 def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=None, fit_degree=3,
@@ -357,6 +607,11 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
             ts_year_fit_sources=None, ts_year_fit_renderers=None, ts_dir_year_fit_sources=None,
             ts_dir_year_fit_renderers=None, ts_glacier_source=None, w_glacier_multiplier=None, w_glacier_offset=None):
     """Handle map tap events. Hook: bkplot.on_event(Tap, lambda evt: _on_tap(...))"""
+
+    # Defensive reset when switching datasets / kinds
+    if _last.get("picked_kind") not in (None, "scalar", "uv"):
+        _last["picked_kind"] = None
+
     try:
         lon_click = float(x_to_lon(evt.x))
         lat_click = float(y_to_lat(evt.y))
@@ -376,7 +631,8 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
                 ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            )
         else:
             _handle_grid_click(
                 lon_click=lon_click, lat_click=lat_click, _last=_last, w_status=w_status,
@@ -388,6 +644,7 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
                 ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers)
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            )
     except Exception as e:
         w_status.object = f"Tap handler error: {e}"

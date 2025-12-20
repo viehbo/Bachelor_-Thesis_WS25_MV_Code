@@ -38,6 +38,9 @@ def make_temperature_plot(
         width=900, height=560, title=title,
         tools="pan,wheel_zoom,reset,save,tap"
     )
+    p.xaxis.axis_label = "WebMercator X (m)"
+    p.yaxis.axis_label = "WebMercator Y (m)"
+
     add_tiles(p)
 
     # Data -> quads
@@ -115,7 +118,8 @@ def make_temperature_plot(
         color_mapper=mapper,
         label_standoff=8,
         location=(0, 0),
-        title=cbar_label or "",
+        title=cbar_label or "Temperature (°C)",
+
     )
     p.add_layout(color_bar, "right")
 
