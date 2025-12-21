@@ -545,6 +545,38 @@ def on_set_trend(event=None):
         ts_glacier_source=ts_glacier_source,
         ts_glacier_source_fit=ts_glacier_source_fit,
     )
+    # ------------------------------------------------------------
+    # If yearly mode is active, redraw yearly overlays immediately
+    # (otherwise the button appears to have "no effect")
+    # ------------------------------------------------------------
+    if w_yearly_mode.value:
+        # Trigger the same logic you use for the yearly timerange watcher
+        _on_yearly_timerange_change(
+            w_yearly_mode=w_yearly_mode,
+            _last=_last,
+            w_years=w_years,
+            w_yearly_timerange=w_yearly_timerange,
+            w_alpha_value=w_alpha_value,
+            set_yearly_overlays=set_yearly_overlays,
+            ts_fig=ts_fig,
+            ts_fig_dir=ts_fig_dir,
+            ts_year_sources=ts_year_sources,
+            ts_year_renderers=ts_year_renderers,
+            ts_year_fit_sources=ts_year_fit_sources,
+            ts_year_fit_renderers=ts_year_fit_renderers,
+            ts_dir_year_sources=ts_dir_year_sources,
+            ts_dir_year_renderers=ts_dir_year_renderers,
+            ts_dir_year_fit_sources=ts_dir_year_fit_sources,
+            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+            w_fit_degree=w_fit_degree,
+
+            # NEW: pass the trend widgets used in yearly mode
+            w_trend_method_climate=w_trend_method_climate,
+            w_trend_param_climate=w_trend_param_climate,
+            w_pre_smooth_enabled_climate=w_pre_smooth_enabled_climate,
+            w_pre_smooth_window_days_climate=w_pre_smooth_window_days_climate,
+        )
+
 
 w_set_poly.on_click(on_set_trend)
 

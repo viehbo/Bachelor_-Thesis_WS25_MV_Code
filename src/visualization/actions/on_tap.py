@@ -310,7 +310,12 @@ def _update_yearly_overlays(*, yearly_enabled_widget, yearly_window_widget, year
                             ts_fig, base_series_or_df, kind: str, units_label: str, title_prefix: str,
                             ts_year_sources, ts_year_renderers, ts_year_fit_sources, ts_year_fit_renderers,
                             ts_fig_dir=None, ts_dir_year_sources=None, ts_dir_year_renderers=None,
-                            ts_dir_year_fit_sources=None, ts_dir_year_fit_renderers=None) -> None:
+                            ts_dir_year_fit_sources=None, ts_dir_year_fit_renderers=None,
+                            trend_method: str = "polyfit",
+                            trend_param: int = 3,
+                            pre_smooth_enabled: bool = False,
+                            pre_smooth_window_days: int = 30) -> None:
+
     """Draw or clear yearly overlays on main (and optional direction) plots."""
     yearly_on = bool(getattr(yearly_enabled_widget, "value", False))
 
@@ -339,6 +344,12 @@ def _update_yearly_overlays(*, yearly_enabled_widget, yearly_window_widget, year
         units=units_label,
         title_prefix=title_prefix,
         dummy_range=dummy_range,
+        trend_method=trend_method,
+        trend_param=trend_param,
+        pre_smooth_enabled=pre_smooth_enabled,
+        pre_smooth_window_days=pre_smooth_window_days,
+
+
     )
 
     if ts_fig_dir is not None and ts_dir_year_sources and ts_dir_year_renderers:
@@ -357,6 +368,10 @@ def _update_yearly_overlays(*, yearly_enabled_widget, yearly_window_widget, year
             units="°",
             title_prefix="Yearly (direction)",
             dummy_range=dummy_range,
+            trend_method=trend_method,
+            trend_param=trend_param,
+            pre_smooth_enabled=pre_smooth_enabled,
+            pre_smooth_window_days=pre_smooth_window_days
         )
 
     _lock_x_range_to_dummy_year(ts_fig, ts_fig_dir)
@@ -367,7 +382,12 @@ def _plot_scalar_branch(*, ts, units, fit_degree, hours, ts_source, ts_source_fi
                         alpha_widget=None, ts_year_sources=None, ts_year_renderers=None, ts_year_fit_sources=None,
                         ts_year_fit_renderers=None, ts_fig_dir=None, ts_dir_year_sources=None,
                         ts_dir_year_renderers=None, ts_dir_year_fit_sources=None,
-                        ts_dir_year_fit_renderers=None) -> Tuple[pd.Series, str]:
+                        ts_dir_year_fit_renderers=None,
+                        trend_method: str = "polyfit",
+                        trend_param: int = 3,
+                        pre_smooth_enabled: bool = False,
+                        pre_smooth_window_days: int = 30) -> Tuple[pd.Series, str]:
+
     """Render scalar time series with polynomial fit and yearly overlays."""
     ts_filtered = filter_by_hours(ts, hours)
     update_timeseries_source(ts_source, ts_filtered.index, ts_filtered.values)
@@ -401,6 +421,10 @@ def _plot_scalar_branch(*, ts, units, fit_degree, hours, ts_source, ts_source_fi
         ts_dir_year_renderers=ts_dir_year_renderers,
         ts_dir_year_fit_sources=ts_dir_year_fit_sources,
         ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+        trend_method=trend_method,
+        trend_param=trend_param,
+        pre_smooth_enabled=pre_smooth_enabled,
+        pre_smooth_window_days=pre_smooth_window_days,
     )
 
     return ts_filtered, "scalar"
@@ -411,7 +435,13 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
                     yearly_enabled_widget=None, yearly_window_widget=None, year_fields=None, alpha_widget=None,
                     ts_year_sources=None, ts_year_renderers=None, ts_year_fit_sources=None, ts_year_fit_renderers=None,
                     ts_dir_year_sources=None, ts_dir_year_renderers=None, ts_dir_year_fit_sources=None,
-                    ts_dir_year_fit_renderers=None) -> Tuple[pd.DataFrame, str]:
+                    ts_dir_year_fit_renderers=None,
+                    trend_method: str = "polyfit",
+                    trend_param: int = 3,
+                    pre_smooth_enabled: bool = False,
+                    pre_smooth_window_days: int = 30) -> Tuple[pd.DataFrame, str]:
+
+
     """Render UV wind data: speed on main plot, direction on direction plot."""
     df_filtered = filter_by_hours(ts_uv, hours)
     speed = np.hypot(df_filtered["u"].to_numpy(), df_filtered["v"].to_numpy())
@@ -456,6 +486,10 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
         ts_dir_year_renderers=ts_dir_year_renderers,
         ts_dir_year_fit_sources=ts_dir_year_fit_sources,
         ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+        trend_method=trend_method,
+        trend_param=trend_param,
+        pre_smooth_enabled=pre_smooth_enabled,
+        pre_smooth_window_days=pre_smooth_window_days,
     )
 
     return df_filtered, "uv"
@@ -490,6 +524,11 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
     _last["selected_glacier_name"] = str(glacier_name)
     _last["glacier_series_raw"] = s_glacier
 
+    _last["trend_method_climate"] = _last.get("trend_method_climate", "polyfit")
+    _last["trend_param_climate"] = _last.get("trend_param_climate", 3)
+    _last["pre_smooth_enabled_climate"] = _last.get("pre_smooth_enabled_climate", False)
+    _last["pre_smooth_window_days_climate"] = _last.get("pre_smooth_window_days_climate", 30)
+
     # Try to overlay climate series as well (optional)
     try:
         mode = _last.get("data_kind") or "temperature"
@@ -514,7 +553,12 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_fig_dir=ts_fig_dir,
                 ts_dir_year_sources=ts_dir_year_sources, ts_dir_year_renderers=ts_dir_year_renderers,
-                ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+                ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+                trend_method=_last["trend_method_climate"],
+                trend_param=_last["trend_param_climate"],
+                pre_smooth_enabled=_last["pre_smooth_enabled_climate"],
+                pre_smooth_window_days=_last["pre_smooth_window_days_climate"],
+
             )
         else:
             ts_used, kind_used = _plot_uv_branch(
@@ -526,7 +570,12 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
                 ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
                 ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
                 ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+                trend_method="polyfit",
+                trend_param=3,
+                pre_smooth_enabled=False,
+                pre_smooth_window_days=30,
+
             )
 
         _last["picked_series"] = ts_used
@@ -593,6 +642,11 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
     _last["picked_series"] = ts_used
     _last["picked_kind"] = kind_used
     _last["picked_units"] = meta.get("units", "" if kind_used == "scalar" else "m/s")
+
+    _last["trend_method_climate"] = _last.get("trend_method_climate", "polyfit")
+    _last["trend_param_climate"] = _last.get("trend_param_climate", 3)
+    _last["pre_smooth_enabled_climate"] = _last.get("pre_smooth_enabled_climate", False)
+    _last["pre_smooth_window_days_climate"] = _last.get("pre_smooth_window_days_climate", 30)
 
     w_status.object = f"Selected grid point ({lon_click:.3f}, {lat_click:.3f})"
 

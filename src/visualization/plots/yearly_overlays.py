@@ -8,7 +8,6 @@ from bokeh.palettes import Category10
 
 from src.visualization.helpers.normalize_to_dummy_year import _normalize_to_dummy_year
 from src.visualization.helpers.slice_series_by_year import slice_series_by_year
-from src.visualization.core.poly_fit import poly_fit_datetime
 from src.visualization.utilities.trend_methods import TrendConfig, compute_trend_line
 
 
@@ -164,7 +163,8 @@ def _setup_raw_overlay(
     except Exception:
         pass
 
-    show_renderer(rnd, alpha=alpha)
+    show_renderer(rnd, alpha=max(alpha, 0.75))
+
 
 
 def _setup_fit_overlay(
@@ -180,32 +180,33 @@ def _setup_fit_overlay(
         pre_smooth_enabled: bool,
         pre_smooth_window_days: int,
 ):
-
     """
-    Setup a polynomial fit overlay for a yearly series.
+    Setup a trend overlay for a yearly series (method selectable).
 
-    Parameters
-    ----------
-    fit_src : ColumnDataSource
-        Fit data source
-    fit_rnd : Renderer
-        Fit renderer
-    series : pd.Series
-        Windowed series for this year
-    fit_degree : int
-        Polynomial degree
-    color : str
-        Line color
-    label : str
-        Legend label (same as raw for grouping)
+    trend_param is interpreted depending on trend_method:
+      - polyfit: degree
+      - rolling_mean: window_days
+      - ewma: span_days
+      - annual_linear: min_years
     """
-    if not validate_series_for_fit(series, fit_degree + 1):
-        clear_and_hide_renderer_pair(fit_src, fit_rnd)
-        try:
-            fit_rnd.legend_label = None
-        except Exception:
-            pass
-        return
+    # For polyfit we still use the series-length check based on degree;
+    # for other methods we just require >= 2 points.
+    if str(trend_method).lower() == "polyfit":
+        if not validate_series_for_fit(series, int(trend_param) + 1):
+            clear_and_hide_renderer_pair(fit_src, fit_rnd)
+            try:
+                fit_rnd.legend_label = None
+            except Exception:
+                pass
+            return
+    else:
+        if series is None or len(series) < 2:
+            clear_and_hide_renderer_pair(fit_src, fit_rnd)
+            try:
+                fit_rnd.legend_label = None
+            except Exception:
+                pass
+            return
 
     cfg = TrendConfig(
         method=str(trend_method),
@@ -217,13 +218,13 @@ def _setup_fit_overlay(
         annual_min_years=int(trend_param),
     )
 
+    # Compute trend line on the real timestamps
     t_fit, y_fit = compute_trend_line(series.index, series.values, cfg)
 
-    # Normalize to dummy year
+    # Normalize to dummy year for overlay comparison
     t_fit_norm = _normalize_to_dummy_year(t_fit)
     t_fit_norm = ensure_naive_index(pd.to_datetime(t_fit_norm))
 
-    # Update source
     update_timeseries_source(
         fit_src,
         t_fit_norm,
@@ -231,15 +232,19 @@ def _setup_fit_overlay(
         convert_datetime=True
     )
 
-    # Configure renderer
     fit_rnd.glyph.line_color = color
     fit_rnd.glyph.line_dash = "solid"
     try:
-        fit_rnd.legend_label = label  # Same label as raw for grouped legend
+        fit_rnd.legend_label = label  # same label as raw for grouped legend
     except Exception:
         pass
 
-    show_renderer(fit_rnd, alpha=0.25)
+    fit_rnd.glyph.line_alpha = 1.0
+    fit_rnd.glyph.line_width = 3
+
+    show_renderer(fit_rnd, alpha=1.0)
+
+
 
 
 def set_yearly_overlays(
@@ -253,15 +258,17 @@ def set_yearly_overlays(
         yearly_fit_sources: list,
         yearly_fit_renderers: list,
         fit_degree: int,
-        trend_method: str = "polyfit",
-        trend_param: int = 3,
-        pre_smooth_enabled: bool = False,
-        pre_smooth_window_days: int = 30,
         alpha: float = 0.35,
         units: str = "",
         title_prefix: str = "Yearly",
         dummy_range=None,
+        # NEW (backward compatible defaults):
+        trend_method: str = "polyfit",
+        trend_param: int = 3,
+        pre_smooth_enabled: bool = False,
+        pre_smooth_window_days: int = 30,
 ):
+
     """
     Draw yearly overlays (and per-year poly fits) of a scalar or UV time series.
 
@@ -352,7 +359,13 @@ def set_yearly_overlays(
         _setup_raw_overlay(src, rnd, s_window, color, label, alpha)
 
         # Setup fit overlay
-        _setup_fit_overlay(fit_src, fit_rnd, s_window, fit_degree, color, label)
+        _setup_fit_overlay(
+            fit_src, fit_rnd, s_window, fit_degree, color, label,
+            trend_method=trend_method,
+            trend_param=trend_param,
+            pre_smooth_enabled=pre_smooth_enabled,
+            pre_smooth_window_days=pre_smooth_window_days,
+        )
 
     # Update figure cosmetics
     xlab = "Day of year (dummy year)"
