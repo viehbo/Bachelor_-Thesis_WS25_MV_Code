@@ -44,6 +44,54 @@ _DUMMY_END = _dt(2000, 12, 31, 23, 59, 59)
 # small helpers
 # -----------------------------------------------------------------------------
 
+
+def _distance_to_nearest_grid(lon_vals, lat_vals, lon_click, lat_click) -> float:
+    """
+    Return approximate distance to the nearest grid point.
+    Supports:
+      - 1D lon + 1D lat (regular grid)  -> uses nearest lon + nearest lat
+      - 2D lon + 2D lat (curvilinear)   -> brute force nearest point
+    Distance is returned in "degrees" (lon/lat units), good enough for gating clicks.
+    """
+    lon_arr = np.asarray(lon_vals)
+    lat_arr = np.asarray(lat_vals)
+
+    # Regular grid: lon and lat are separate 1D axes
+    if lon_arr.ndim == 1 and lat_arr.ndim == 1:
+        lon_1d = lon_arr[np.isfinite(lon_arr)]
+        lat_1d = lat_arr[np.isfinite(lat_arr)]
+        if lon_1d.size == 0 or lat_1d.size == 0:
+            return np.inf
+
+        dlon = float(np.min(np.abs(lon_1d - lon_click)))
+        dlat = float(np.min(np.abs(lat_1d - lat_click)))
+        return float(np.hypot(dlon, dlat))
+
+    # Curvilinear grid: lon/lat are 2D arrays of same shape
+    if lon_arr.ndim == 2 and lat_arr.ndim == 2 and lon_arr.shape == lat_arr.shape:
+        m = np.isfinite(lon_arr) & np.isfinite(lat_arr)
+        if not m.any():
+            return np.inf
+        d2 = (lon_arr[m] - lon_click) ** 2 + (lat_arr[m] - lat_click) ** 2
+        return float(np.sqrt(np.min(d2)))
+
+    # Fallback: attempt to flatten only if shapes match
+    lon_flat = lon_arr.ravel()
+    lat_flat = lat_arr.ravel()
+    if lon_flat.shape == lat_flat.shape:
+        m = np.isfinite(lon_flat) & np.isfinite(lat_flat)
+        if not m.any():
+            return np.inf
+        d2 = (lon_flat[m] - lon_click) ** 2 + (lat_flat[m] - lat_click) ** 2
+        return float(np.sqrt(np.min(d2)))
+
+    # Unknown / unsupported coordinate structure
+    return np.inf
+
+
+
+
+
 def _show_stats(values: Union[np.ndarray, Iterable[float]], unit: str, panes: Dict[str, object]) -> None:
     """Update statistics panes (mean, max, min)."""
     mean_p, max_p, min_p = panes.get("mean"), panes.get("max"), panes.get("min")
@@ -529,63 +577,7 @@ def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status
     _last["pre_smooth_enabled_climate"] = _last.get("pre_smooth_enabled_climate", False)
     _last["pre_smooth_window_days_climate"] = _last.get("pre_smooth_window_days_climate", 30)
 
-    # Try to overlay climate series as well (optional)
-    try:
-        mode = _last.get("data_kind") or "temperature"
-        ts_grid, meta_grid = _extract_timeseries_safe(_last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click, mode=mode)
-    except Exception:
-        ts_grid, meta_grid = None, None
 
-    if ts_grid is not None and meta_grid is not None and len(ts_grid) > 0:
-        hours = _last.get("hours")
-        if w_stat_ndatapoints is not None:
-            try:
-                w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts_grid.shape[0]}"
-            except Exception:
-                pass
-
-        if meta_grid["kind"] == "scalar":
-            ts_used, kind_used = _plot_scalar_branch(
-                ts=ts_grid, units=meta_grid.get("units", ""), fit_degree=fit_degree, hours=hours,
-                ts_source=ts_source, ts_source_fit=ts_source_fit, ts_fig=ts_fig, stat_panes=stat_panes,
-                yearly_enabled_widget=yearly_enabled_widget, yearly_window_widget=yearly_window_widget,
-                year_fields=year_fields, alpha_widget=alpha_widget, ts_year_sources=ts_year_sources,
-                ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
-                ts_year_fit_renderers=ts_year_fit_renderers, ts_fig_dir=ts_fig_dir,
-                ts_dir_year_sources=ts_dir_year_sources, ts_dir_year_renderers=ts_dir_year_renderers,
-                ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
-                trend_method=_last["trend_method_climate"],
-                trend_param=_last["trend_param_climate"],
-                pre_smooth_enabled=_last["pre_smooth_enabled_climate"],
-                pre_smooth_window_days=_last["pre_smooth_window_days_climate"],
-
-            )
-        else:
-            ts_used, kind_used = _plot_uv_branch(
-                ts_uv=ts_grid, units=meta_grid.get("units", "m/s"), fit_degree=fit_degree, hours=hours,
-                ts_source=ts_source, ts_source_fit=ts_source_fit, ts_source_dir=ts_source_dir,
-                ts_source_dir_fit=ts_source_dir_fit, ts_fig=ts_fig, ts_fig_dir=ts_fig_dir, stat_panes=stat_panes,
-                yearly_enabled_widget=yearly_enabled_widget, yearly_window_widget=yearly_window_widget,
-                year_fields=year_fields, alpha_widget=alpha_widget, ts_year_sources=ts_year_sources,
-                ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
-                ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
-                ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-                ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
-                trend_method="polyfit",
-                trend_param=3,
-                pre_smooth_enabled=False,
-                pre_smooth_window_days=30,
-
-            )
-
-        _last["picked_series"] = ts_used
-        _last["picked_kind"] = kind_used
-        _last["picked_units"] = meta_grid.get("units", "" if kind_used == "scalar" else "m/s")
-
-        # IMPORTANT: keep set_timeseries signature satisfied if you want direct updates as well
-        set_timeseries(ts_source, ts_used, kind=kind_used)
-
-    w_status.object = f"Selected glacier: **{glacier_name}** ({lon_click:.3f}, {lat_click:.3f})"
 
 
 def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoints, fit_degree,
@@ -597,6 +589,18 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
                        ts_dir_year_fit_renderers=None) -> None:
     """Handle click on a regular grid point."""
     mode = _last.get("data_kind") or "temperature"
+
+    # Reject clicks far away from grid points
+    lon_vals = _last.get("lon")
+    lat_vals = _last.get("lat")
+
+    if lon_vals is not None and lat_vals is not None:
+        d = _distance_to_nearest_grid(lon_vals, lat_vals, lon_click, lat_click)
+
+        # threshold ~ half a grid cell (tune if needed)
+        if d > 0.25:
+            w_status.object = "Clicked outside data grid."
+            return
 
     try:
         ts, meta = _extract_timeseries_safe(_last["files"], _last["ds_key"], _last["time_range"], lon_click, lat_click, mode=mode)
@@ -687,6 +691,7 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
                 ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
                 ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
             )
+            return
         else:
             _handle_grid_click(
                 lon_click=lon_click, lat_click=lat_click, _last=_last, w_status=w_status,
