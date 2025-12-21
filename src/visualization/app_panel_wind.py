@@ -341,7 +341,26 @@ w_trend_method_climate.param.watch(lambda e: _update_trend_param_label(), "value
 _update_trend_param_label()
 
 
+def _update_trend_param_label_glacier(event=None):
+    m = w_trend_method_glacier.value
+    if m == "polyfit":
+        w_trend_param_glacier.name = "Poly degree"
+        w_trend_param_glacier.start, w_trend_param_glacier.end = 1, 10
+    elif m == "rolling_mean":
+        w_trend_param_glacier.name = "Window (days)"
+        w_trend_param_glacier.start, w_trend_param_glacier.end = 1, 3650
+    elif m == "ewma":
+        w_trend_param_glacier.name = "Span (days)"
+        w_trend_param_glacier.start, w_trend_param_glacier.end = 1, 3650
+    elif m == "annual_linear":
+        w_trend_param_glacier.name = "Min years"
+        w_trend_param_glacier.start, w_trend_param_glacier.end = 2, 50
 
+w_trend_method_glacier.param.watch(lambda e: _update_trend_param_label_glacier(), "value")
+_update_trend_param_label_glacier()
+
+trend_col_climate = pn.Card(..., title="Trend (wind / temperature)", collapsed=False)
+trend_col_glacier = pn.Card(..., title="Trend (glacier)", collapsed=False)
 
 
 w_yearly_timerange.param.watch(
@@ -612,18 +631,38 @@ glacier_slider_col = pn.Column(
 )
 
 
+
+trend_col_climate = pn.Column(
+    pn.pane.Markdown("### Trend (wind / temperature)"),
+    w_trend_method_climate,
+    w_trend_param_climate,
+    w_pre_smooth_enabled_climate,
+    w_pre_smooth_window_days_climate,
+    width=260,
+)
+
+trend_col_glacier = pn.Column(
+    pn.pane.Markdown("### Trend (glacier)"),
+    w_trend_method_glacier,
+    w_trend_param_glacier,
+    w_pre_smooth_enabled_glacier,
+    w_pre_smooth_window_days_glacier,
+    width=260,
+)
+
+trend_row = pn.Row(
+    trend_col_climate,
+    pn.Spacer(width=20),
+    trend_col_glacier,
+)
+
+
 controls = pn.Column(
     #pn.Row(w_files),
     pn.Row(w_hours),
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
-    pn.Spacer(height=10),
-    pn.pane.Markdown("### Glacier trend"),
-    pn.Row(w_trend_method_climate),
-    pn.Row(w_trend_param_climate),
-    pn.Row(w_pre_smooth_enabled_climate),
-    pn.Row(w_pre_smooth_window_days_climate),
-
+    trend_row,
     pn.Row(w_yearly_mode),
     w_yearly_timerange,
     w_years,
@@ -633,9 +672,12 @@ controls = pn.Column(
     w_stat_ndatapoints,
     w_sampletext,
     w_citetext,
-    width=420,
+    width=600,
     sizing_mode="stretch_height"
 )
+
+
+
 
 
 top_section_controls = pn.Column(
