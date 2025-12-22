@@ -35,6 +35,9 @@ from src.visualization.utilities.bokeh_utils import (
 from src.visualization.utilities.time_filter_utils import filter_by_hours
 from src.visualization.utilities.validation_utils import has_finite_data
 
+from src.visualization.utilities.value_filter_utils import filter_series_by_int_range
+
+
 R = 6378137.0  # WebMercator Earth radius (meters)
 _DUMMY_START = _dt(2000, 1, 1)
 _DUMMY_END = _dt(2000, 12, 31, 23, 59, 59)
@@ -173,6 +176,35 @@ def _lock_x_range_to_dummy_year(ts_fig, ts_fig_dir=None):
             ts_fig_dir.y_range.end = 360
     except Exception:
         pass
+
+def _in_circular_range_deg(angle_deg: np.ndarray, start_deg: int, end_deg: int) -> np.ndarray:
+    """
+    Inclusive circular range on [0, 360).
+    Supports wrap-around: e.g. start=300, end=30 selects [300..360) U [0..30].
+
+    IMPORTANT:
+    - Interpret 0..360 as "full circle" (no filtering).
+    - Treat 360° as equivalent to 0° for angle values, but NOT for the range endpoint.
+    """
+    a = np.asarray(angle_deg, dtype=float) % 360.0
+
+    s_in = int(start_deg)
+    e_in = int(end_deg)
+
+    # Full-circle selection: do not filter
+    if (s_in % 360) == 0 and (e_in % 360) == 0 and e_in >= 360:
+        return np.ones_like(a, dtype=bool)
+
+    s = float(s_in % 360)
+    e = float(e_in % 360)
+
+    # Non-wrapping interval
+    if s <= e:
+        return (a >= s) & (a <= e)
+
+    # Wrap-around interval
+    return (a >= s) | (a <= e)
+
 
 
 # -----------------------------------------------------------------------------
@@ -434,12 +466,19 @@ def _plot_scalar_branch(*, ts, units, fit_degree, hours, ts_source, ts_source_fi
                         trend_method: str = "polyfit",
                         trend_param: int = 3,
                         pre_smooth_enabled: bool = False,
-                        pre_smooth_window_days: int = 30) -> Tuple[pd.Series, str]:
+                        pre_smooth_window_days: int = 30,
+                        # NEW: stage-2 value filter config (temp)
+                        value_filter_enabled: bool = False,
+                        temp_range: tuple = (None, None)) -> Tuple[pd.Series, str]:
+
 
     """Render scalar time series with polynomial fit and yearly overlays."""
     ts_filtered = filter_by_hours(ts, hours)
-    update_timeseries_source(ts_source, ts_filtered.index, ts_filtered.values)
-    _show_stats(ts_filtered.values, units, stat_panes)
+
+    # Stage-2 value filter (temperature)
+    if bool(value_filter_enabled):
+        vmin, vmax = temp_range
+        ts_filtered = filter_series_by_int_range(ts_filtered, vmin, vmax)
 
     if ts_source_fit is not None:
         _polyfit_and_update_source(ts_filtered.index, ts_filtered.values, fit_degree, ts_source_fit)
@@ -487,12 +526,43 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
                     trend_method: str = "polyfit",
                     trend_param: int = 3,
                     pre_smooth_enabled: bool = False,
-                    pre_smooth_window_days: int = 30) -> Tuple[pd.DataFrame, str]:
+                    pre_smooth_window_days: int = 30,
+                    # NEW: stage-2 value filter config (wind)
+                    value_filter_enabled: bool = False,
+                    speed_range: tuple = (None, None),
+                    dir_range: tuple = (None, None)) -> Tuple[pd.DataFrame, str]:
+
 
 
     """Render UV wind data: speed on main plot, direction on direction plot."""
     df_filtered = filter_by_hours(ts_uv, hours)
+    if df_filtered is None or df_filtered.empty:
+        update_timeseries_source(ts_source, [], [])
+        if ts_source_dir is not None:
+            update_timeseries_source(ts_source_dir, [], [])
+        return df_filtered, "uv"
+
+    # Compute speed + direction first (direction needed for filtering)
     speed = np.hypot(df_filtered["u"].to_numpy(), df_filtered["v"].to_numpy())
+    dir_series = compute_wind_direction_deg_from_uv(df_filtered)  # pd.Series aligned to df_filtered.index
+    direction = dir_series.to_numpy()
+
+    # Stage-2 value filters (speed + circular direction)
+    if bool(value_filter_enabled):
+        smin, smax = speed_range
+        dmin, dmax = dir_range
+
+        smin = -np.inf if smin is None else float(smin)
+        smax = np.inf if smax is None else float(smax)
+
+        mask_speed = (speed >= smin) & (speed <= smax)
+        mask_dir = _in_circular_range_deg(direction, int(dmin), int(dmax))
+        mask = mask_speed & mask_dir
+
+        df_filtered = df_filtered.loc[mask]
+        speed = speed[mask]
+        dir_series = dir_series.loc[df_filtered.index]  # keep aligned
+
 
     update_timeseries_source(ts_source, df_filtered.index, speed)
     _show_stats(speed, units, stat_panes or {})
@@ -501,10 +571,10 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
         _polyfit_and_update_source(df_filtered.index, speed, fit_degree, ts_source_fit)
 
     if ts_source_dir is not None:
-        dir_series = compute_wind_direction_deg_from_uv(df_filtered)
         update_timeseries_source(ts_source_dir, dir_series.index, dir_series.values)
         if ts_source_dir_fit is not None:
             _polyfit_and_update_source(dir_series.index, dir_series.values, fit_degree, ts_source_dir_fit)
+
 
     if ts_fig is not None:
         set_figure_axes_labels(ts_fig, x_label="Time", y_label=f"Wind speed ({units})")
@@ -628,7 +698,9 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
             ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
             ts_year_fit_renderers=ts_year_fit_renderers, ts_fig_dir=ts_fig_dir,
             ts_dir_year_sources=ts_dir_year_sources, ts_dir_year_renderers=ts_dir_year_renderers,
-            ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            ts_dir_year_fit_sources=ts_dir_year_fit_sources, ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+            value_filter_enabled=_last.get("value_filter_enabled", False),
+            temp_range=_last.get("temp_range", (None, None)),
         )
     else:
         ts_used, kind_used = _plot_uv_branch(
@@ -640,7 +712,11 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
             ts_year_renderers=ts_year_renderers, ts_year_fit_sources=ts_year_fit_sources,
             ts_year_fit_renderers=ts_year_fit_renderers, ts_dir_year_sources=ts_dir_year_sources,
             ts_dir_year_renderers=ts_dir_year_renderers, ts_dir_year_fit_sources=ts_dir_year_fit_sources,
-            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers
+            ts_dir_year_fit_renderers=ts_dir_year_fit_renderers,
+            value_filter_enabled=_last.get("value_filter_enabled", False),
+            speed_range=_last.get("speed_range", (None, None)),
+            dir_range=_last.get("dir_range", (0, 360)),
+
         )
 
     _last["picked_series"] = ts_used

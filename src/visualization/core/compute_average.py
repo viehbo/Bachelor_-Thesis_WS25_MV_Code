@@ -14,6 +14,30 @@ from src.visualization.helpers.time_name import _time_name
 # helpers
 # -----------------------------------------------------------------------------
 
+def _full_circle_selected(dmin: int, dmax: int) -> bool:
+    # treat 0..360 (or 0..>=360) as full circle
+    return (int(dmin) % 360) == 0 and (int(dmax) % 360) == 0 and int(dmax) >= 360
+
+
+def _dir_mask_circular(direction_deg: xr.DataArray, dmin: int, dmax: int) -> xr.DataArray:
+    """
+    Inclusive circular mask for direction on [0, 360).
+    Wrap-around supported (e.g., 300..30).
+    Full-circle (0..360) returns all True.
+    """
+    if _full_circle_selected(dmin, dmax):
+        return xr.ones_like(direction_deg, dtype=bool)
+
+    d = direction_deg % 360.0
+    s = float(int(dmin) % 360)
+    e = float(int(dmax) % 360)
+
+    if s <= e:
+        return (d >= s) & (d <= e)
+    return (d >= s) | (d <= e)
+
+
+
 def _slice_time(ds: xr.Dataset, tname: str, t_range):
     if not t_range:
         return ds
@@ -78,7 +102,20 @@ def _ensure_spatial_array(da: xr.DataArray, spatial_dims: Sequence[str], *, name
 # main
 # -----------------------------------------------------------------------------
 
-def compute_average(DATASETS, selected_files, ds_key, mode, t_range, hours=None):
+def compute_average(
+    DATASETS,
+    selected_files,
+    ds_key,
+    mode,
+    t_range,
+    hours=None,
+    *,
+    value_filter_enabled: bool = False,
+    temp_range=(None, None),
+    speed_range=(None, None),
+    dir_range=(0, 360),
+):
+
     """
     Compute averaged data for wind, temperature, or glacier datasets.
 
@@ -146,8 +183,32 @@ def compute_average(DATASETS, selected_files, ds_key, mode, t_range, hours=None)
             u_name = _find_var(ds, cfg["candidates"]["u"])
             v_name = _find_var(ds, cfg["candidates"]["v"])
 
-            mean_u = ds[u_name].mean(dim=tname)
-            mean_v = ds[v_name].mean(dim=tname)
+            u = ds[u_name]
+            v = ds[v_name]
+
+            # Stage-2 value filter (wind) applied BEFORE averaging
+            if value_filter_enabled:
+                smin, smax = speed_range
+                dmin, dmax = dir_range
+
+                smin = -np.inf if smin is None else float(smin)
+                smax = np.inf if smax is None else float(smax)
+
+                speed = xr.apply_ufunc(np.hypot, u, v)
+
+                # Direction in degrees in [0, 360)
+                # Convention: meteorological direction (from which wind blows) often uses atan2(-u, -v)
+                direction = (xr.apply_ufunc(np.degrees, xr.apply_ufunc(np.arctan2, -u, -v)) + 360.0) % 360.0
+
+                mask_speed = (speed >= smin) & (speed <= smax)
+                mask_dir = _dir_mask_circular(direction, int(dmin), int(dmax))
+                mask = mask_speed & mask_dir
+
+                u = u.where(mask)
+                v = v.where(mask)
+
+            mean_u = u.mean(dim=tname, skipna=True)
+            mean_v = v.mean(dim=tname, skipna=True)
 
             u2d = _ensure_spatial_array(mean_u, spatial_dims, name=f"mean_u ({u_name})")
             v2d = _ensure_spatial_array(mean_v, spatial_dims, name=f"mean_v ({v_name})")
@@ -156,6 +217,7 @@ def compute_average(DATASETS, selected_files, ds_key, mode, t_range, hours=None)
             units = ds[u_name].attrs.get("units", "")
 
             return avg2d, extent, units, lon, lat, u2d, v2d
+
 
         # ------------- TEMPERATURE -------------
         # Prefer dataset config if available, otherwise auto-detect
@@ -173,9 +235,20 @@ def compute_average(DATASETS, selected_files, ds_key, mode, t_range, hours=None)
                     f"Available data variables: {list(ds.data_vars)}"
                 )
 
-        avg = ds[x_name].mean(dim=tname)
+        avg_da = ds[x_name]
+
+        # Stage-2 value filter (temperature) applied BEFORE averaging
+        if value_filter_enabled:
+            vmin, vmax = temp_range
+            if vmin is not None:
+                avg_da = avg_da.where(avg_da >= float(vmin))
+            if vmax is not None:
+                avg_da = avg_da.where(avg_da <= float(vmax))
+
+        avg = avg_da.mean(dim=tname, skipna=True)
         avg2d = _ensure_spatial_array(avg, spatial_dims, name=f"avg ({x_name})")
 
         units = ds[x_name].attrs.get("units", "")
         return avg2d, extent, units, lon, lat, None, None
+
 

@@ -148,6 +148,29 @@ w_hours = pn.widgets.MultiChoice(
     width=300,
 )
 
+
+w_value_filter_enabled = pn.widgets.Checkbox(name="Value filter", value=False)
+
+w_temp_range = pn.widgets.IntRangeSlider(
+    name="Temperature range (°C)",
+    start=-50, end=50, value=(-50, 50), step=1
+)
+
+w_speed_range = pn.widgets.IntRangeSlider(
+    name="Wind speed range (m/s)",
+    start=0, end=60, value=(0, 60), step=1
+)
+
+w_dir_range = pn.widgets.IntRangeSlider(
+    name="Wind direction range (°)",
+    start=0, end=359, value=(0, 359), step=1
+)
+
+
+
+
+
+
 w_glacier_multiplier = pn.widgets.FloatSlider(
     name="Multiplier",
     start=-10.0, end=10.0, value=10.0, step=0.1,
@@ -174,15 +197,9 @@ w_status = pn.pane.Markdown("", height=40)
 w_citetext = pn.pane.Markdown("Cite of the ECMWF", height=40)
 w_sampletext = pn.pane.Markdown("Sampletext", height=60)
 
-_last = {
-    "files": [],
-    "ds_key": None,
-    "time_range": None,
-    "lon": None,
-    "lat": None,
-    "figure": None,
-    "glaciers": None,
-}
+_last = {"files": [], "ds_key": None, "time_range": None, "lon": None, "lat": None, "figure": None, "glaciers": None,
+         "value_filter_enabled": bool(w_value_filter_enabled.value), "temp_range": tuple(map(int, w_temp_range.value)),
+         "speed_range": tuple(map(int, w_speed_range.value)), "dir_range": tuple(map(int, w_dir_range.value))}
 
 TREND_METHODS = {
     "Polyfit": "polyfit",
@@ -321,6 +338,30 @@ w_pre_smooth_window_days_climate = pn.widgets.IntInput(
 )
 
 
+def _sync_value_filter_state(event=None):
+    _last["value_filter_enabled"] = bool(w_value_filter_enabled.value)
+    _last["temp_range"] = tuple(map(int, w_temp_range.value))
+    _last["speed_range"] = tuple(map(int, w_speed_range.value))
+    _last["dir_range"] = tuple(map(int, w_dir_range.value))
+
+def _update_value_filter_visibility():
+    kind = _last.get("data_kind")
+    # Always show the master enable
+    w_value_filter_enabled.visible = True
+
+    # Show only the relevant sliders
+    w_temp_range.visible = (kind == "temperature")
+    w_speed_range.visible = (kind == "wind")
+    w_dir_range.visible = (kind == "wind")
+
+# Watchers: keep _last up to date
+w_value_filter_enabled.param.watch(_sync_value_filter_state, "value")
+w_temp_range.param.watch(_sync_value_filter_state, "value")
+w_speed_range.param.watch(_sync_value_filter_state, "value")
+w_dir_range.param.watch(_sync_value_filter_state, "value")
+
+
+
 
 def _update_trend_param_label(event=None):
     m = w_trend_method_climate.value
@@ -359,8 +400,6 @@ def _update_trend_param_label_glacier(event=None):
 w_trend_method_glacier.param.watch(lambda e: _update_trend_param_label_glacier(), "value")
 _update_trend_param_label_glacier()
 
-trend_col_climate = pn.Card(..., title="Trend (wind / temperature)", collapsed=False)
-trend_col_glacier = pn.Card(..., title="Trend (glacier)", collapsed=False)
 
 
 w_yearly_timerange.param.watch(
@@ -441,6 +480,8 @@ def on_pick_files(event=None):
         kind, _ = detect_kind_for_files([Path(p) for p in w_files.value])
         w_files_summary.object = f"**Files:** {len(paths)} — **Type:** {kind}"
         _last["data_kind"] = kind
+        _update_value_filter_visibility()
+
     except Exception as e:
         print(e)
         # Keep selection, but show error and mark kind unknown
@@ -613,10 +654,8 @@ w_timerange.param.watch(lambda e: populate_year_options_from_timerange(w_timeran
 # call dataset change
 on_dataset_change()
 
-
-
-
-
+_update_value_filter_visibility()
+_sync_value_filter_state()
 
 
 
@@ -660,6 +699,11 @@ trend_row = pn.Row(
 controls = pn.Column(
     #pn.Row(w_files),
     pn.Row(w_hours),
+    pn.Row(w_value_filter_enabled),
+    w_temp_range,
+    pn.Row(w_speed_range),
+    pn.Row(w_dir_range),
+
     pn.Row(w_alpha_value, w_set_alpha),
     pn.Row(w_fit_degree, w_set_poly),
     trend_row,

@@ -59,13 +59,25 @@ def do_render(w_timerange,
 
         mode = _last.get("data_kind") or DATASETS[w_dataset.value]["mode"]
 
+        # --- stage-2 value filter (map) ---
+        value_filter_enabled = bool(_last.get("value_filter_enabled", False))
+        temp_range = _last.get("temp_range", (None, None))
+        speed_range = _last.get("speed_range", (None, None))
+        dir_range = _last.get("dir_range", (0, 360))
+
         avg2d, extent, units, lon, lat, u2d, v2d = compute_average(
             DATASETS,
             selected,
             w_dataset.value,
-            mode,  # ✅ pass detected type (wind/temperature/glacier)
-            t_val,  # ✅ t_range argument
+            mode,
+            t_val,
             hours=hour_list,
+
+            # NEW: value filter inputs
+            value_filter_enabled=value_filter_enabled,
+            temp_range=temp_range,
+            speed_range=speed_range,
+            dir_range=dir_range,
         )
 
         label_base = DATASETS[w_dataset.value]["label"]
