@@ -672,7 +672,7 @@ glacier_slider_col = pn.Column(
 
 
 trend_col_climate = pn.Column(
-    pn.pane.Markdown("### Trend (wind / temperature)"),
+    pn.pane.Markdown("### Weather Data Trendline"),
     w_trend_method_climate,
     w_trend_param_climate,
     w_pre_smooth_enabled_climate,
@@ -681,7 +681,7 @@ trend_col_climate = pn.Column(
 )
 
 trend_col_glacier = pn.Column(
-    pn.pane.Markdown("### Trend (glacier)"),
+    pn.pane.Markdown("### Galcier Trendline"),
     w_trend_method_glacier,
     w_trend_param_glacier,
     w_pre_smooth_enabled_glacier,
@@ -705,8 +705,9 @@ controls = pn.Column(
     pn.Row(w_dir_range),
 
     pn.Row(w_alpha_value, w_set_alpha),
-    pn.Row(w_fit_degree, w_set_poly),
+
     trend_row,
+    pn.Row(w_set_poly),
     pn.Row(w_yearly_mode),
     w_yearly_timerange,
     w_years,

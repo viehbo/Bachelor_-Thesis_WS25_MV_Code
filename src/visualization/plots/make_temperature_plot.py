@@ -38,8 +38,8 @@ def make_temperature_plot(
         width=900, height=560, title=title,
         tools="pan,wheel_zoom,reset,save,tap"
     )
-    p.xaxis.axis_label = "WebMercator X (m)"
-    p.yaxis.axis_label = "WebMercator Y (m)"
+    p.xaxis.axis_label = "Latidute"
+    p.yaxis.axis_label = "Lonitude"
 
     add_tiles(p)
 

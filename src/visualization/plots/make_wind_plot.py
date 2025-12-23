@@ -86,8 +86,8 @@ def make_wind_plot(
         title=title,
         tools="pan,wheel_zoom,reset,save,tap",
     )
-    p.xaxis.axis_label = "WebMercator X (m)"
-    p.yaxis.axis_label = "WebMercator Y (m)"
+    p.xaxis.axis_label = "Latitude"
+    p.yaxis.axis_label = "Longitude"
 
     add_tiles(p)
 
