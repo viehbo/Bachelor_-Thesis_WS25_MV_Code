@@ -83,7 +83,7 @@ w_loadtime = pn.widgets.Button(name="Load files and timerange")
 w_stat_mean = pn.pane.Markdown("**Mean:** –", height=30)
 w_stat_max  = pn.pane.Markdown("**Max:** –",  height=30)
 w_stat_min  = pn.pane.Markdown("**Min:** –",  height=30)
-w_stat_ndatapoints = pn.pane.Markdown("**Number of datapoints in the range:** -", height=30)
+w_stat_ndatapoints = pn.pane.Markdown("**Number of datapoints in the range:** -", height=50)
 w_fit_degree = pn.widgets.IntInput(name="Poly degree", value=3, start=1, end=10)
 
 
@@ -158,7 +158,7 @@ w_temp_range = pn.widgets.IntRangeSlider(
 
 w_speed_range = pn.widgets.IntRangeSlider(
     name="Wind speed range (m/s)",
-    start=0, end=60, value=(0, 60), step=1
+    start=0, end=10, value=(0, 10), step=1
 )
 
 w_dir_range = pn.widgets.IntRangeSlider(
@@ -171,21 +171,22 @@ w_dir_range = pn.widgets.IntRangeSlider(
 
 
 
-w_glacier_multiplier = pn.widgets.FloatSlider(
+w_glacier_multiplier_plot = pn.widgets.FloatSlider(
     name="Multiplier",
     start=-10.0, end=10.0, value=10.0, step=0.1,
     orientation="horizontal",
     width=220,
-    visible=False,
+    visible=True,
 )
 
-w_glacier_offset = pn.widgets.FloatSlider(
+w_glacier_offset_plot = pn.widgets.FloatSlider(
     name="Offset",
     start=-20.0, end=20.0, value=0.0, step=0.1,
     orientation="horizontal",
     width=220,
-    visible=False,
+    visible=True,
 )
+
 
 
 
@@ -204,7 +205,7 @@ _last = {"files": [], "ds_key": None, "time_range": None, "lon": None, "lat": No
 TREND_METHODS = {
     "Polyfit": "polyfit",
     "Rolling mean": "rolling_mean",
-    "EWMA": "ewma",
+    "Exponentially Weighted Moving Average": "ewma",
     "Annual linear": "annual_linear",
 }
 
@@ -528,15 +529,16 @@ def _update_glacier_overlay_from_sliders(event=None):
     if s_raw is None or len(s_raw) == 0:
         return
 
-    mult = float(w_glacier_multiplier.value)
-    off  = float(w_glacier_offset.value)
+    mult = float(w_glacier_multiplier_plot.value)
+    off = float(w_glacier_offset_plot.value)
 
     s_norm = normalize_glacier_series_for_secondary_axis(s_raw, multiplier=mult, offset=off)
     update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
 
-w_glacier_multiplier.param.watch(_update_glacier_overlay_from_sliders, "value")
-w_glacier_offset.param.watch(_update_glacier_overlay_from_sliders, "value")
+w_glacier_multiplier_plot.param.watch(_update_glacier_overlay_from_sliders, "value")
+w_glacier_offset_plot.param.watch(_update_glacier_overlay_from_sliders, "value")
+
 
 
 w_dataset.param.watch(lambda e: on_dataset_change(), 'value')
@@ -571,8 +573,8 @@ w_render.on_click(lambda e: do_render(w_timerange=w_timerange,
                                       w_yearly_mode=w_yearly_mode,
                                       w_years=w_years,
                                       w_alpha_value=w_alpha_value,
-                                      w_glacier_multiplier=w_glacier_multiplier,
-                                      w_glacier_offset=w_glacier_offset,
+                                      w_glacier_multiplier=w_glacier_multiplier_plot,
+                                      w_glacier_offset=w_glacier_offset_plot,
                                       ts_year_sources=ts_year_sources,
                                       ts_year_renderers=ts_year_renderers,
                                       ts_dir_year_sources=ts_dir_year_sources,
@@ -660,7 +662,7 @@ _sync_value_filter_state()
 
 
 
-
+"""
 glacier_slider_col = pn.Column(
     w_glacier_multiplier,
     w_glacier_offset,
@@ -668,7 +670,7 @@ glacier_slider_col = pn.Column(
     sizing_mode="fixed",
     margin=(0, 0, 0, 10),
 )
-
+"""
 
 
 trend_col_climate = pn.Column(
@@ -732,9 +734,9 @@ top_section_controls = pn.Column(
 
 
 glacier_slider_left = pn.Column(
-    "Glacier overlay",
-    w_glacier_multiplier,
-    w_glacier_offset,
+    pn.pane.Markdown("### Glacier overlay", margin=(0, 0, 10, 0)),
+    w_glacier_multiplier_plot,
+    w_glacier_offset_plot,
     width=250,
     sizing_mode="fixed",
     styles={
@@ -743,7 +745,8 @@ glacier_slider_left = pn.Column(
         "background": "white",
     },
 )
-
+glacier_slider_left.visible = False
+_last["glacier_slider_left_obj"] = glacier_slider_left
 
 
 

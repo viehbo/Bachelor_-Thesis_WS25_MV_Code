@@ -92,6 +92,29 @@ def _distance_to_nearest_grid(lon_vals, lat_vals, lon_click, lat_click) -> float
     return np.inf
 
 
+def _update_ndatapoints_from_ts_source(ts_source, w_stat_ndatapoints) -> None:
+    """
+    Update w_stat_ndatapoints based on the *actually plotted* main time series source.
+    This guarantees correct counting after hour/value filters and any other post-processing.
+
+    Counts the number of x-axis entries:
+      - prefers key 't'
+      - falls back to key 'x'
+    """
+    if w_stat_ndatapoints is None:
+        return
+
+    try:
+        data = getattr(ts_source, "data", None) or {}
+        t_key = "t" if "t" in data else ("x" if "x" in data else None)
+        n = len(data.get(t_key, [])) if t_key else 0
+        w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {n}"
+    except Exception:
+        # Keep UI stable; do not crash callback on count issues
+        try:
+            w_stat_ndatapoints.object = "**Number of datapoints in the range:** —"
+        except Exception:
+            pass
 
 
 
@@ -382,6 +405,33 @@ def _extract_timeseries_safe(files, ds_key, t_range, lon_click, lat_click, mode:
         raise
 
 
+
+
+def _sync_glacier_slider_visibility(_last, ts_glacier_source):
+    """
+    Show glacier_slider_left if glacier source has data; otherwise hide it.
+    Robust against ColumnDataSource using either 't' or 'x' for the time axis.
+    """
+    panel = _last.get("glacier_slider_left_obj")
+    if panel is None:
+        return
+
+    try:
+        data = getattr(ts_glacier_source, "data", None) or {}
+        # Accept both ('t','y') and ('x','y') conventions
+        t_key = "t" if "t" in data else ("x" if "x" in data else None)
+        y_key = "y" if "y" in data else None
+
+        has_data = bool(t_key and y_key and len(data.get(t_key, [])) > 0 and len(data.get(y_key, [])) > 0)
+    except Exception:
+        has_data = False
+
+    panel.visible = bool(has_data)
+
+
+
+
+
 # -----------------------------------------------------------------------------
 # plotting branches
 # -----------------------------------------------------------------------------
@@ -618,26 +668,54 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
 # -----------------------------------------------------------------------------
 
 def _handle_glacier_click(*, glacier_name, lon_click, lat_click, _last, w_status, w_stat_ndatapoints,
-                          w_glacier_multiplier, w_glacier_offset, ts_glacier_source, ts_fig, fit_degree,
+                          glacier_slider_left, w_glacier_multiplier, w_glacier_offset,
+                          ts_glacier_source, ts_fig, fit_degree,
                           ts_source, ts_source_fit, stat_panes, ts_source_dir=None, ts_source_dir_fit=None,
                           ts_fig_dir=None, yearly_enabled_widget=None, yearly_window_widget=None, year_fields=None,
                           alpha_widget=None, ts_year_sources=None, ts_year_renderers=None, ts_year_fit_sources=None,
                           ts_year_fit_renderers=None, ts_dir_year_sources=None, ts_dir_year_renderers=None,
                           ts_dir_year_fit_sources=None, ts_dir_year_fit_renderers=None) -> None:
+
     """Handle click on a glacier location."""
     from src.visualization.plots.glacier_overlay import glacier_series_by_name
 
     s_glacier = glacier_series_by_name(GLACIERS["dir"], str(glacier_name))
+
+    # UI feedback
+    if w_status is not None:
+        w_status.object = f"Selected glacier: {glacier_name}"
+
+    if w_stat_ndatapoints is not None:
+        try:
+            w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {len(s_glacier)}"
+        except Exception:
+            pass
+
+
     mult = float(getattr(w_glacier_multiplier, "value", 10.0) or 10.0)
     off = float(getattr(w_glacier_offset, "value", 0.0) or 0.0)
 
     s_norm = normalize_glacier_series_for_secondary_axis(s_glacier, multiplier=mult, offset=off)
     update_glacier_secondary_axis(s_norm=s_norm, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig)
 
-    if w_glacier_multiplier is not None:
-        w_glacier_multiplier.visible = True
-    if w_glacier_offset is not None:
-        w_glacier_offset.visible = True
+    # Normalize glacier source keys to ('t','y') so visibility logic + glyphs are consistent
+    try:
+        d = ts_glacier_source.data or {}
+        if "t" not in d and "x" in d:
+            ts_glacier_source.data = {"t": d.get("x", []), "y": d.get("y", [])}
+    except Exception:
+        pass
+
+
+    _sync_glacier_slider_visibility(_last, ts_glacier_source)
+
+    # Show the entire glacier slider panel (container), not individual widgets
+    # Show panel via state-owned reference (robust even if not passed through callbacks)
+    panel = _last.get("glacier_slider_left_obj")
+    if panel is not None:
+        panel.visible = True
+
+
 
     _last["selected_glacier_name"] = str(glacier_name)
     _last["glacier_series_raw"] = s_glacier
@@ -659,6 +737,12 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
                        ts_dir_year_fit_renderers=None) -> None:
     """Handle click on a regular grid point."""
     mode = _last.get("data_kind") or "temperature"
+
+    # Hide the glacier slider panel when clicking regular grid points
+    glacier_slider_left = _last.get("glacier_slider_left_obj")
+    if glacier_slider_left is not None:
+        glacier_slider_left.visible = False
+
 
     # Reject clicks far away from grid points
     lon_vals = _last.get("lon")
@@ -683,11 +767,7 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
         return
 
     hours = _last.get("hours")
-    if w_stat_ndatapoints is not None:
-        try:
-            w_stat_ndatapoints.object = f"**Number of datapoints in the range:** {ts.shape[0]}"
-        except Exception:
-            pass
+
 
     if meta["kind"] == "scalar":
         ts_used, kind_used = _plot_scalar_branch(
@@ -732,6 +812,8 @@ def _handle_grid_click(*, lon_click, lat_click, _last, w_status, w_stat_ndatapoi
 
     # IMPORTANT: set_timeseries requires keyword-only 'kind'
     set_timeseries(ts_source, ts_used, kind=kind_used)
+    _update_ndatapoints_from_ts_source(ts_source, w_stat_ndatapoints)
+
 
 
 def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=None, fit_degree=3,
@@ -739,7 +821,8 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
             year_fields=None, alpha_widget=None, yearly_window_widget=None, ts_year_sources=None,
             ts_year_renderers=None, ts_dir_year_sources=None, ts_dir_year_renderers=None, w_stat_ndatapoints=None,
             ts_year_fit_sources=None, ts_year_fit_renderers=None, ts_dir_year_fit_sources=None,
-            ts_dir_year_fit_renderers=None, ts_glacier_source=None, w_glacier_multiplier=None, w_glacier_offset=None):
+            ts_dir_year_fit_renderers=None, ts_glacier_source=None, glacier_slider_left=None,
+            w_glacier_multiplier=None, w_glacier_offset=None):
     """Handle map tap events. Hook: bkplot.on_event(Tap, lambda evt: _on_tap(...))"""
 
     # Defensive reset when switching datasets / kinds
@@ -756,8 +839,11 @@ def _on_tap(evt, w_status, _last, ts_source, ts_fig, _stat_panes, ts_source_fit=
         if glacier_name:
             _handle_glacier_click(
                 glacier_name=glacier_name, lon_click=lon_click, lat_click=lat_click, _last=_last,
-                w_status=w_status, w_stat_ndatapoints=w_stat_ndatapoints, w_glacier_multiplier=w_glacier_multiplier,
-                w_glacier_offset=w_glacier_offset, ts_glacier_source=ts_glacier_source, ts_fig=ts_fig,
+                w_status=w_status, w_stat_ndatapoints=w_stat_ndatapoints,
+                glacier_slider_left=glacier_slider_left,
+                w_glacier_multiplier=w_glacier_multiplier,
+                w_glacier_offset=w_glacier_offset,
+                ts_glacier_source=ts_glacier_source, ts_fig=ts_fig,
                 fit_degree=fit_degree, ts_source=ts_source, ts_source_fit=ts_source_fit, stat_panes=_stat_panes,
                 ts_source_dir=ts_source_dir, ts_source_dir_fit=ts_source_dir_fit, ts_fig_dir=ts_fig_dir,
                 yearly_enabled_widget=yearly_enabled_widget, yearly_window_widget=yearly_window_widget,
