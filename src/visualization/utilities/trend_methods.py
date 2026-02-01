@@ -37,7 +37,7 @@ def _apply_pre_smooth(s: pd.Series, enabled: bool, window_days: int) -> pd.Serie
         return s
     wd = max(int(window_days), 1)
     # time-based rolling window
-    return s.rolling(f"{wd}D", min_periods=1).mean()
+    return s.rolling(f"{wd}D", min_periods=1, center=True).mean()
 
 
 def _trend_polyfit(s: pd.Series, degree: int) -> Tuple[List, List]:
@@ -47,7 +47,7 @@ def _trend_polyfit(s: pd.Series, degree: int) -> Tuple[List, List]:
 
 def _trend_rolling_mean(s: pd.Series, window_days: int) -> Tuple[List, List]:
     wd = max(int(window_days), 1)
-    y = s.rolling(f"{wd}D", min_periods=1).mean()
+    y = s.rolling(f"{wd}D", min_periods=1, center=True).mean()
     return s.index.to_pydatetime().tolist(), y.tolist()
 
 
@@ -57,7 +57,8 @@ def _trend_ewma(s: pd.Series, span_days: int) -> Tuple[List, List]:
     y_daily = daily.ewm(span=sd, adjust=False).mean()
 
     # align to original timestamps for overlay plotting
-    y = y_daily.reindex(s.index, method="ffill")
+    y = y_daily.reindex(s.index).interpolate(method="time").ffill().bfill()
+
     return s.index.to_pydatetime().tolist(), y.tolist()
 
 
