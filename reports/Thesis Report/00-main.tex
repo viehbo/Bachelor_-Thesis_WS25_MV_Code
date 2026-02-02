@@ -7,6 +7,7 @@
 \usepackage{csquotes}
 \usepackage{graphicx}
 \usepackage{xcolor}
+\usepackage{array}
 
 % we recommend using biblatex for references
 \usepackage[
@@ -67,17 +68,17 @@
 %% 15 - 20 pages (main matter)
 %% appendix
 
+
 \include{frontmatter/quote}
 \include{frontmatter/affidavit}
 \include{frontmatter/abstract-en}
-\include{frontmatter/abstract-de}
+%%\include{frontmatter/abstract-de}
 \include{frontmatter/acknowledgments}
 \ClearPage
 
 \pdfbookmark[1]{Contents}{sec:toc}
 \tableofcontents
-\listoffigures
-\listoftables
+
 %\listofequations
 \ClearPage
 
@@ -86,6 +87,12 @@
 
 \include{01-introduction}
 \include{02-related_work}
+\include{reports/Thesis Report/03-solution}
+
+
+\listoffigures
+\listoftables
+
 
 \printbibliography[title = {References}, heading = bibintoc]
 

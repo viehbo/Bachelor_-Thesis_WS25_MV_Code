@@ -1,6 +1,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% 
 %%\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+
+%% Intruduction: explain the problem, data, ...
+%% optional section with background info 
+%% section: related work, projects from wgms, timeseries visu, gesospatial 
+%% Problem characterisation ... data and tasks ... datastructures and insights
+%%    what makes the data important? user tasks? 
+%% solution? How does it work? naming section by tool or result ??
+%%      its about to explain the task and why, not explicit how to work with it
+%%      Section or Subsection abour implementation
+%% section about evaluation or proove by use case 
+%% future work, limitations... 
+%% conclusion (compact)
+%% 15 - 20 pages (main matter)
+%% appendix
+
+
+
+
 \chapter{Introduction}
 \label{sec:introduction}
 
@@ -8,9 +26,39 @@
 \section{Motivation}
 \label{sec:introduction:motivation}
 
-Space for your introduction.
-A typical introduction consists of a motivation for your thesis, your objectives, your research approach, and finishes with an outlook over your work.
-Of course, different structuring and naming of sections is possible.
+Clinmate Change is one of the most challenging task we are facing. Technologies are often named as solution. If one digs a bit deeper, many technological inventions are very energy consuming by itself. Especially when it comes to AI, the high amount of power and water consumption is huge and still on the rise.
+In my opinion, a lot unnecessary computation is going on, driven by a "trial and error" approach. This is often based by a weak preselection of the used data. When it comes to meteorological data, one encounters a overwhelming amount of data. Just using all of them and interpret the model-outcome is simply impossible.
+This is where GlacyVis come into play. It gives you deep insight into the data and with that an idea, what they can be used for and how. On the other hand, a user can judge if specific observations are even suitable for a potential machine learning task.
+
+
+\section{The ERA5 Dataset}
+\label{sec:intruduction:data}
+
+The ERA5-Land hourly data is a high quality, very dense dataset.
+Just to get a feeling of the size, here a few numbers\cite{era5_land_earthdatahub}:
+
+\begin{center}
+\begin{tabular}{ | m{8em} | m{8em}| m{15em} | } 
+  \hline
+  Spatial grid cells & ~1,654,320 cells & 0.1°x0.1° or ~9x9km global land mass (134 million square kilometer, without Antarctica) \\ 
+  \hline
+  Temporal steps & ~657,000 hours & 75 years × hourly data \\
+  \hline
+  Variables & 49 & Standard set of land surface variables \\ 
+  \hline
+\end{tabular}
+\end{center}
+This makes an approximate number of $5.3*10^{13}$ data points. In ARCO Zarr v3\parencite{zarr_specification} format, these are \textbf{706.1 TB}\cite{era5_land_earthdatahub} of data.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.5\textwidth]{reports/Thesis Report/figures/ERA5_land_map.png}
+  \caption{Overview visualization of the ERA5-Land reanalysis dataset.
+  Source: Copernicus Climate Change Service (C3S) \cite{era5_land_image}.}
+  \label{fig:era5_land_overview}
+\end{figure}
+
+
 
 
 \section{Objectives and Approach}
