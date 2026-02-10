@@ -22,7 +22,7 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
     src_raw = ColumnDataSource(dict(t=[], y=[]))
     src_fit = ColumnDataSource(dict(t=[], y=[])) if show_fit else None
 
-    # raw series (adds legend)
+    # raw series (creates legend)
     line_raw = fig.line(
         x="t",
         y="y",
@@ -33,7 +33,7 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
         legend_label="Observed",
     )
 
-    # trend series (adds legend)
+    # trend series (creates legend)
     if show_fit:
         fig.line(
             x="t",
@@ -52,6 +52,14 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
     fig.legend.border_line_alpha = 1.0
     fig.legend.click_policy = "hide"
     fig.legend.location = "top_left"
+
+    # IMPORTANT:
+    # Do NOT add a second Legend() to this figure.
+    # Keep a reference to the single, existing legend for yearly mode updates.
+    try:
+        fig._main_legend = fig.legend[0]
+    except Exception:
+        fig._main_legend = None
 
     hover = HoverTool(
         tooltips=[("Date", "@t{%F %H:%M}"), (y_label or "Value", "@y{0.00}")],
@@ -73,8 +81,7 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
 
     # IMPORTANT:
     # - Keep alpha at 1.0; control visibility with visible=True/False only.
-    # - Give a default color so legend samples render correctly once legend_label is set.
-    # - Year labels are assigned later in yearly_overlays.py via rnd.legend_label = "YYYY".
+    # - Give a default color so legend samples render correctly.
     for k in range(10):
         color = PALETTE10[k % len(PALETTE10)]
 

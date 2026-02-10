@@ -9,6 +9,9 @@ from src.visualization.helpers.yearly_mode import (
 
 from src.visualization.helpers.renderer_visibility import set_main_series_visibility
 
+NORMAL_PLOT_HEIGHT = 260
+YEARLY_PLOT_HEIGHT = 520
+
 
 def toggle_yearly_visibility(
     w_yearly_mode,
@@ -29,6 +32,7 @@ def toggle_yearly_visibility(
       - Switch widget visibility
       - Hide raw series (and glacier secondary axis) in yearly mode
       - Lock x-ranges to dummy year in yearly mode
+      - Increase plot height only in yearly mode (double height)
     """
     vis = bool(w_yearly_mode.value)
 
@@ -44,7 +48,8 @@ def toggle_yearly_visibility(
     if vis:
         ensure_dummy_year_domain(w_yearly_timerange)
 
-    # If yearly mode ON and options not filled yet, populate available years from main timerange
+    # If yearly mode ON and options not filled yet, populate available years
+    # from the main timerange
     if vis and (not w_years.options):
         populate_year_options_from_timerange(w_timerange, w_years)
 
@@ -67,3 +72,11 @@ def toggle_yearly_visibility(
         ts_fig=ts_fig,
         ts_fig_dir=ts_fig_dir,
     )
+
+    # Plot height: double height only in yearly mode
+    if vis:
+        ts_fig.height = YEARLY_PLOT_HEIGHT
+        ts_fig_dir.height = YEARLY_PLOT_HEIGHT
+    else:
+        ts_fig.height = NORMAL_PLOT_HEIGHT
+        ts_fig_dir.height = NORMAL_PLOT_HEIGHT

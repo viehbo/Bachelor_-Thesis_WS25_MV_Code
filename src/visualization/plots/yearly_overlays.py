@@ -5,11 +5,11 @@ Refactored to use common utilities for better maintainability.
 import pandas as pd
 import numpy as np
 from bokeh.palettes import Category10
+from bokeh.models import Legend, LegendItem
 
 from src.visualization.helpers.normalize_to_dummy_year import _normalize_to_dummy_year
 from src.visualization.helpers.slice_series_by_year import slice_series_by_year
 from src.visualization.utilities.trend_methods import TrendConfig, compute_trend_line
-
 
 # Import new utilities
 from src.visualization.utilities.bokeh_utils import (
@@ -31,6 +31,33 @@ from src.visualization.utilities.validation_utils import (
 )
 
 PALETTE10 = list(Category10[10])
+
+
+def _update_yearly_legend(fig, items):
+    """
+    Update the SINGLE existing legend on the figure.
+    We must NOT add new Legend() models, otherwise Bokeh will refuse legend_label=...
+    """
+    # Preferred: the stored reference from make_lineplot.py
+    lg = getattr(fig, "_main_legend", None)
+
+    # Fallback: use first existing legend if present
+    if lg is None:
+        try:
+            if fig.legend and len(fig.legend) > 0:
+                lg = fig.legend[0]
+        except Exception:
+            lg = None
+
+    if lg is None:
+        # If there is truly no legend yet, we cannot safely create a new one here
+        # because the rest of the codebase uses legend_label=... convenience args.
+        return
+
+    lg.items = items
+    lg.click_policy = "hide"
+    lg.location = "top_left"
+
 
 
 def _convert_to_speed_series(base_series_or_df, kind: str) -> pd.Series:
@@ -110,13 +137,6 @@ def _clear_year_slot(src, rnd, fit_src, fit_rnd):
     clear_and_hide_renderer_pair(src, rnd)
     clear_and_hide_renderer_pair(fit_src, fit_rnd)
 
-    # Clear legend labels
-    try:
-        rnd.legend_label = None
-        fit_rnd.legend_label = None
-    except Exception:
-        pass
-
 
 def _setup_raw_overlay(
         src,
@@ -140,7 +160,7 @@ def _setup_raw_overlay(
     color : str
         Line color
     label : str
-        Legend label
+        Legend label (kept for API compatibility; legend is built explicitly elsewhere)
     alpha : float
         Line alpha
     """
@@ -158,13 +178,8 @@ def _setup_raw_overlay(
 
     # Configure renderer
     rnd.glyph.line_color = color
-    try:
-        rnd.legend_label = label
-    except Exception:
-        pass
 
     show_renderer(rnd, alpha=max(alpha, 0.75))
-
 
 
 def _setup_fit_overlay(
@@ -178,7 +193,7 @@ def _setup_fit_overlay(
         trend_method: str,
         trend_param: int,
         pre_smooth_enabled: bool,
-        pre_smooth_window_days: int,
+        pre_smooth_window_days: int = 30,
 ):
     """
     Setup a trend overlay for a yearly series (method selectable).
@@ -194,18 +209,10 @@ def _setup_fit_overlay(
     if str(trend_method).lower() == "polyfit":
         if not validate_series_for_fit(series, int(trend_param) + 1):
             clear_and_hide_renderer_pair(fit_src, fit_rnd)
-            try:
-                fit_rnd.legend_label = None
-            except Exception:
-                pass
             return
     else:
         if series is None or len(series) < 2:
             clear_and_hide_renderer_pair(fit_src, fit_rnd)
-            try:
-                fit_rnd.legend_label = None
-            except Exception:
-                pass
             return
 
     cfg = TrendConfig(
@@ -234,17 +241,10 @@ def _setup_fit_overlay(
 
     fit_rnd.glyph.line_color = color
     fit_rnd.glyph.line_dash = "solid"
-    try:
-        fit_rnd.legend_label = label  # same label as raw for grouped legend
-    except Exception:
-        pass
-
     fit_rnd.glyph.line_alpha = 1.0
     fit_rnd.glyph.line_width = 3
 
     show_renderer(fit_rnd, alpha=1.0)
-
-
 
 
 def set_yearly_overlays(
@@ -268,15 +268,14 @@ def set_yearly_overlays(
         pre_smooth_enabled: bool = False,
         pre_smooth_window_days: int = 30,
 ):
-
     """
-    Draw yearly overlays (and per-year poly fits) of a scalar or UV time series.
+    Draw yearly overlays (and per-year trend fits) of a scalar or UV time series.
 
     Each selected year is:
     1. Extracted from the full series
     2. Optionally windowed to a specific time range (dummy_range)
     3. Normalized to dummy year 2000 for overlay comparison
-    4. Fit with a polynomial curve
+    4. Trend is computed and overlaid
 
     Parameters
     ----------
@@ -297,7 +296,7 @@ def set_yearly_overlays(
     yearly_fit_renderers : list
         List of 10 renderers for fit lines
     fit_degree : int
-        Polynomial degree for fitting
+        Polynomial degree for fitting (legacy; still used by callers, not necessarily used by trend_method)
     alpha : float
         Line alpha for raw overlays (default: 0.35)
     units : str
@@ -369,7 +368,7 @@ def set_yearly_overlays(
 
     # Update figure cosmetics
     xlab = "Day of year (dummy year)"
-    ylab = units  # bei dir ist units bereits ein Label-String
+    ylab = units
     if ylab:
         set_figure_axes_labels(fig, x_label=xlab, y_label=ylab)
     else:
@@ -379,7 +378,7 @@ def set_yearly_overlays(
         selected_count = len(valid_years)
         set_figure_title(fig, f"{title_prefix} overlays ({selected_count} selected)")
 
-    # Configure legend
+    # Configure base legend(s) if they exist
     try:
         if fig.legend:
             for lg in fig.legend:
@@ -387,3 +386,31 @@ def set_yearly_overlays(
                 lg.location = "top_left"
     except Exception:
         pass
+
+    # ------------------------------------------------------------
+    # Build / refresh the dedicated yearly legend items (explicit)
+    # ------------------------------------------------------------
+    yearly_items = []
+    for i in range(10):
+        if i >= len(valid_years):
+            continue
+
+        yr = valid_years[i]
+        raw_r = yearly_renderers[i]
+        fit_r = yearly_fit_renderers[i]
+
+        # Skip slots that ended up hidden/empty
+        raw_vis = (raw_r is not None and getattr(raw_r, "visible", False))
+        fit_vis = (fit_r is not None and getattr(fit_r, "visible", False))
+        if not raw_vis and not fit_vis:
+            continue
+
+        renderers = []
+        if raw_r is not None:
+            renderers.append(raw_r)
+        if fit_r is not None:
+            renderers.append(fit_r)
+
+        yearly_items.append(LegendItem(label=str(yr), renderers=renderers))
+
+    _update_yearly_legend(fig, yearly_items)
