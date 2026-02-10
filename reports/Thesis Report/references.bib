@@ -1,58 +1,58 @@
 @article{bach_time_2016,
-	title = {Time {Curves}: {Folding} {Time} to {Visualize} {Patterns} of {Temporal} {Evolution} in {Data}},
-	volume = {22},
-	shorttitle = {Time curves},
-	doi = {10.1109/TVCG.2015.2467851},
-	number = {1},
-	urldate = {2016-01-27},
-	journal = {IEEE Transactions on Visualization and Computer Graphics},
-	author = {Bach, Benjamin and Shi, Conglei and Heulot, Nicolas and Madhyastha, Tara and Grabowski, Tom and Dragicevic, Pierre},
-	year = {2016},
-	pages = {559--568},
+  author    = {Bach, Benjamin and Shi, Conglei and Heulot, Nicolas and Madhyastha, Tara and Grabowski, Tom and Dragicevic, Pierre},
+  title     = {Time Curves: Folding Time to Visualize Patterns of Temporal Evolution in Data},
+  journal   = {IEEE Transactions on Visualization and Computer Graphics},
+  volume    = {22},
+  number    = {1},
+  pages     = {559--568},
+  year      = {2016},
+  doi       = {10.1109/TVCG.2015.2467851}
 }
 
 @book{python_maps,
-    author = {Adam Symington},
-    title = {Python Maps},
-    subtitle = {Geospatial Visualization with Python},
-    publisher = {Locate Press Inc.},
-    year = {2025},
-    ISBN = {978-1-998414-08-6}
+  author    = {Symington, Adam},
+  title     = {Python Maps},
+  subtitle  = {Geospatial Visualization with Python},
+  publisher = {Locate Press Inc.},
+  year      = {2025},
+  isbn      = {978-1-998414-08-6}
 }
 
 @article{bergauf_1_2025,
-    author = {Gerhard Karl Lieb, Andreas Kellerer-Pirklbauer},
-    title = {Gletscherbericht 2023/24},
-    journal = {Bergauf},
-    year = {2025},
-    url = {https://www.alpenverein.at/bk/bergauf/bergauf2025/Bergauf_1_2025/html5/index.html?&locale=DEU&pn=13},
+  author    = {Lieb, Gerhard Karl and Kellerer-Pirklbauer, Andreas},
+  title     = {Gletscherbericht 2023/24},
+  journal   = {Bergauf},
+  year      = {2025},
+  url       = {https://www.alpenverein.at/bk/bergauf/bergauf2025/Bergauf_1_2025/html5/index.html},
+  urldate   = {2026-02-02}
 }
 
-@manual{era5_doc,
-    key = "no key",
-    title = {ERA5: data documentation},
-    url = {}
+@online{era5_doc,
+  author    = {{Copernicus Climate Change Service (C3S)}},
+  title     = {ERA5 Data Documentation},
+  year      = {2024},
+  url       = {https://confluence.ecmwf.int/display/CKB/ERA5},
+  urldate   = {2026-02-02},
+  note      = {Official technical documentation for the ERA5 reanalysis dataset}
+}
+
+@dataset{era5,
+  author    = {{Copernicus Climate Change Service (C3S)}},
+  title     = {ERA5 Reanalysis},
+  year      = {2023},
+  url       = {https://cds.climate.copernicus.eu},
+  urldate   = {2025-02-01}
 }
 
 @dataset{era5_land_earthdatahub,
-  title     = {ERA5-Land Reanalysis Dataset},
   author    = {{Copernicus Climate Change Service (C3S)}},
-  year      = {2024},
+  title     = {ERA5-Land Reanalysis Dataset},
   publisher = {ECMWF},
+  year      = {2024},
   url       = {https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land},
   urldate   = {2026-02-02},
-  abstract  = {ERA5-Land is a replay of the land component of the ERA5 climate reanalysis, providing consistent land surface variables at enhanced resolution.}
+  note      = {Land-surface-only reanalysis derived from ERA5}
 }
-
-
-@dataset{era5,
-  title   = {ERA5 Reanalysis},
-  author  = {{Copernicus Climate Change Service}},
-  year    = {2023},
-  url     = {https://cds.climate.copernicus.eu},
-  urldate = {2025-02-01}
-}
-
 
 @online{era5_land_image,
   author    = {{Copernicus Climate Change Service (C3S)}},
@@ -60,28 +60,41 @@
   year      = {2024},
   url       = {https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land},
   urldate   = {2026-02-02},
-  note      = {Image source: Earth Data Hub}
+  note      = {Image source used for dataset illustration}
 }
 
-
-
-
-# related work about to use ERA5 data
 @online{era5_land_greece_floods_tutorial,
-  title     = {ERA5-Land Tutorial: Floods and Precipitation Anomaly Analysis in Greece},
   author    = {{Copernicus Climate Change Service (C3S)}},
+  title     = {ERA5-Land Tutorial: Floods and Precipitation Anomaly Analysis in Greece},
   year      = {2024},
   url       = {https://earthdatahub.destine.eu/tutorials/tutorial-era5-land-floods-precipitation-anomaly-in-greece},
   urldate   = {2026-02-02},
-  note      = {Tutorial demonstrating ERA5-Land-based precipitation anomaly analysis for flood events in Greece}
+  note      = {Methodological tutorial demonstrating precipitation anomaly analysis}
 }
 
+@online{earthdatahub_tutorials,
+  author    = {{Earth Data Hub Consortium}},
+  title     = {Earth Data Hub Tutorials},
+  year      = {2024},
+  url       = {https://earthdatahub.destine.eu/tutorials},
+  urldate   = {2026-02-02},
+  note      = {Collection of methodological tutorials for Earth system data analysis}
+}
 
 @online{zarr_specification,
-  title     = {Zarr Storage Specification},
   author    = {{Zarr Developers}},
+  title     = {Zarr Storage Specification},
   year      = {2024},
   url       = {https://zarr-specs.readthedocs.io/en/latest/specs.html},
   urldate   = {2026-02-02},
-  note      = {Technical specification for the Zarr chunked, compressed, N-dimensional array storage format}
+  note      = {Technical specification of the Zarr chunked array storage format}
+}
+
+@online{maussion_publications,
+  author    = {Maussion, Fabien},
+  title     = {List of Scientific Publications},
+  year      = {2025},
+  url       = {https://fabienmaussion.info/publications/},
+  urldate   = {2026-02-02},
+  note      = {Overview of peer-reviewed research on glacier modeling and climate data}
 }
