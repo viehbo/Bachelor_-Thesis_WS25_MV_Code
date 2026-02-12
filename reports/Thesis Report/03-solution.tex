@@ -24,7 +24,7 @@ Goal is to find the optimal tradeoff between a maximum of interactivity and a in
   box/.style={draw, line width=0.6pt, align=center, minimum height=1.2cm},
   smallbox/.style={box, minimum width=5.8cm},
   tallbox/.style={box, minimum width=4.2cm, minimum height=6.2cm},
-  widebox/.style={box, minimum width=10.6cm},
+  widebox/.style={box, minimum width=10.9cm},
   font=\small
 ]
 
@@ -43,12 +43,19 @@ Goal is to find the optimal tradeoff between a maximum of interactivity and a in
 \label{fig:ui_layout}
 \end{figure}
 
-
+The workflow is starting from the top-left and ends on the bottom-right. Like when reading a book. This should provide the basic structure for an intuitive handling.
+Of course, in all sections, interaction will be possible. But they will influence each other only top-down:
+\textbf{File selection} $\rightarrow$ \textbf{Adjustments and controls} $\rightarrow$ \textbf{Map} $\rightarrow$ \textbf{Line Plot}
 
 
 \section{Data Preprocessing}
 
-from ERA5 .grib to netCDF4
+ECMWF provides ERA5 data in GRIB\cite{ecmwf_grib_explanation} format. The GRIB format is designed to storing data and distribute them. There are Python libraries, which can read this format but for the visualisation task in this project, GRIB-files are not ideal.
+
+According to \textcite[pp.~85--87]{python_maps}, the library \textit{Xarray} is optimized for performing labeled multi-dimensional computations and subsequent visualization of geospatial data. 
+Working directly with GRIB files, however, can create a computational bottleneck in this environment due to their structure and decoding requirements. 
+Both \textit{Python Maps} \parencite[p.~88]{python_maps} and the official Xarray documentation \parencite{xarray_documentation} recommend the use of the NetCDF format for efficient storage and processing of scientific data. 
+NetCDF provides a self-describing and platform-independent data model that is particularly well suited for climate and meteorological datasets \parencite{netcdf_documentation}.
 
 
 
