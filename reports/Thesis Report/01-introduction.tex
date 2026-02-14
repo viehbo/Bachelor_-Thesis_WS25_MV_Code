@@ -37,17 +37,22 @@ This is where GlacyVis come into play. It gives you deep insight into the data a
 The ERA5-Land hourly data is a high quality, very dense dataset.
 Just to get a feeling of the size, here a few numbers\cite{era5_land_earthdatahub}:
 
-\begin{center}
+\begin{table}[htbp]
+\centering
+\caption{Overview of ERA5-Land dataset dimensions and storage volume.}
+\label{tab:era5_land_dimensions}
+
 \begin{tabular}{ | m{8em} | m{8em}| m{15em} | } 
   \hline
-  Spatial grid cells & ~1,654,320 cells & 0.1°x0.1° or ~9x9km global land mass (134 million square kilometer, without Antarctica) \\ 
+  Spatial grid cells & $\sim$1,654,320 cells & 0.1° $\times$ 0.1° (9×9 km), global land mass (excluding Antarctica) \\ 
   \hline
-  Temporal steps & ~657,000 hours & 75 years × hourly data \\
+  Temporal steps & $\sim$657,000 hours & 75 years of hourly data \\
   \hline
   Variables & 49 & Standard set of land surface variables \\ 
   \hline
 \end{tabular}
-\end{center}
+\end{table}
+
 This makes an approximate number of $5.3*10^{13}$ data points. In ARCO Zarr v3\parencite{zarr_specification} format, these are \textbf{706.1 TB}\cite{era5_land_earthdatahub} of data.
 
 \begin{figure}[htbp]

@@ -15,6 +15,7 @@ The objective is to create a interactive tool as a web-interface, with that a pe
 
 
 \section{Conceptual design choices}
+\label{sec:conceptual_design_choices}
 
 Goal is to find the optimal tradeoff between a maximum of interactivity and a intuative interface. For this, the user interface is seperated into 4 sections.
 
@@ -59,12 +60,201 @@ NetCDF provides a self-describing and platform-independent data model that is pa
 
 
 
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  node distance=10mm and 10mm,
+  box/.style={
+    draw,
+    rounded corners=2pt,
+    align=center,
+    inner sep=5pt,
+    minimum height=9mm,
+    minimum width=42mm
+  },
+  arrow/.style={-{Latex[length=2.2mm]}, line width=0.6pt}
+]
+
+% ================= ERA5 branch =================
+\node[font=\small\bfseries] (era5_title) {ERA5 preprocessing};
+
+\node[box, below=6mm of era5_title] (era5_raw)
+  {ERA5\\Downloaded data\\(GRIB)};
+
+\node[box, below=of era5_raw] (era5_conv)
+  {Convert to NetCDF};
+
+\node[box, below=of era5_conv] (era5_wind)
+  {Wind preprocessing\\Combine $u$ and $v$\\per lat/lon point};
+
+\node[box, below=of era5_wind] (era5_out)
+  {ERA5\\NetCDF datasets\\(analysis-ready)};
+
+\draw[arrow] (era5_raw) -- (era5_conv);
+\draw[arrow] (era5_conv) -- (era5_wind);
+\draw[arrow] (era5_wind) -- (era5_out);
+
+% ================= WGMS branch =================
+\node[font=\small\bfseries, right=35mm of era5_title] (wgms_title)
+  {Glacier preprocessing (WGMS)};
+
+\node[box, below=6mm of wgms_title] (wgms_raw)
+  {WGMS\\Downloaded data\\(CSV)};
+
+\node[box, below=of wgms_raw] (wgms_extract)
+  {Extract fields\\Name, lat/lon,\\mass balance, timestamp};
+
+% Parallel outputs (tighter spacing)
+\node[box, below left=8mm and -20mm of wgms_extract] (wgms_mass)
+  {Mass balance time series\\CSV (per glacier)};
+
+\node[box, below right=8mm and -20mm of wgms_extract] (wgms_meta)
+  {Glacier metadata\\CSV (name $\rightarrow$ lat/lon)};
+
+
+\draw[arrow] (wgms_raw) -- (wgms_extract);
+\draw[arrow] (wgms_extract) -- (wgms_mass);
+\draw[arrow] (wgms_extract) -- (wgms_meta);
+
+\end{tikzpicture}
+\caption{Data preprocessing workflow for ERA5 meteorological data and WGMS glacier data.}
+\label{fig:data_preprocessing_workflow}
+\end{figure}
+
+
+
+
+\newpage
+
+
 \section{User Interface}
 
-Parts and interaction, design choice 
+-- Parts and interaction, design choice 
+
+\subsection{Environment and packages}
+With the learning's from the Seminar in AI project and some trial and error, the following approach seems to be optimal: \textit{Panel} as framework for the web interface + \textit{Bokeh} for the visualization and interaction elements.
+
+\vspace{1em}
+\textbf{Panel}
+
+Panel is an open-source Python library designed to streamline the development of robust tools, dashboards, and complex applications entirely within Python. With a comprehensive philosophy, Panel integrates seamlessly with the PyData ecosystem, offering powerful, interactive data tables, visualizations, and much more, to unlock, visualize, share, and collaborate on your data for efficient workflows.
+
+Its feature set includes high-level reactive APIs and lower-level callback-based APIs, enabling rapid development of exploratory applications and facilitating the creation of intricate, multi-page applications with extensive interactivity.
+
+Panel is a proud member of the HoloViz ecosystem, providing a gateway to a cohesive suite of data exploration tools.
+
+\vspace{1em}
+\textbf{Bokeh}
+
+Bokeh is a Python library for creating interactive visualizations for modern web browsers. It helps you build beautiful graphics, ranging from simple plots to complex dashboards with streaming datasets. With Bokeh, you can create JavaScript-powered visualizations without writing any JavaScript yourself.
+
+\vspace{1em}
+
+As in Conceptual design choices,\ref{sec:conceptual_design_choices}, the user interface is separated into 4 sections. 
+
+\subsection{File selection}
+
+Follow the intuitive left-to-right approach.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=1.05\textwidth]{reports/Thesis Report/figures/interface_file_selection.png}
+  \caption{File selection field with the slider for pre filtering the time range.}
+  \label{fig:interface_file_selection}
+\end{figure}
+
+
+\newpage
+\subsection{Adjustments and Controls}
+
+Compromise between clean structure and a maximum of freedom.
+
+
+\begin{wrapfigure}{r}{0.7\textwidth}
+  \centering
+  \includegraphics[width=0.6\textwidth]{reports/Thesis Report/figures/interface_controls.png}
+  \caption{Area of controls, which are influences all upcoming visualizations}
+  \label{fig:interface_controls}
+\end{wrapfigure}
+
+text text
+
+
+
+\newpage
+
+
+
+\FloatBarrier
+
+\subsection{Map}
+
+
+\begin{figure}[htbp]
+  \centering
+
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{reports/Thesis Report/figures/interface_map_temperature.png}
+    \caption{Map with temperature.}
+    \label{fig:interface_map_temperature}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{reports/Thesis Report/figures/interface_map_wind.png}
+    \caption{Map with wind.}
+    \label{fig:interface_map_wind}
+  \end{subfigure}
+
+  \caption{Comparison of the map visualization using different meteorological variables.}
+  \label{fig:interface_map_comparison}
+\end{figure}
+
+
+
+\subsection{Timeseries plot}
+
+Line plot, 2 in Wind mode. 
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=1.05\textwidth]{reports/Thesis Report/figures/interface_line_plot.png}
+  \caption{lineplot with temperature}
+  \label{fig:interface_line_plot}
+\end{figure}
+
+
+And with glacier data:
+
+
+sample textsample textsample text
+sample textsample text
+sample text
+
+
+
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=1.05\textwidth]{reports/Thesis Report/figures/interface_line_plot_wind.png}
+  \caption{lineplot with wind}
+  \label{fig:interface_line_plot_wind}
+\end{figure}
+
+
+
+
+
+\newpage
 
 
 \section{Implementation}
+
+Here I want to provide some insights, how the implementation is done. I will focus only on the key parts and the most important learnings.
 
 Panel + Bokeh
 

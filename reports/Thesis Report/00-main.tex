@@ -10,7 +10,12 @@
 \usepackage{array}
 \usepackage{wrapfig}
 \usepackage{tikz}
-\usetikzlibrary{positioning}
+\usetikzlibrary{arrows.meta, positioning, fit}
+%%\usetikzlibrary{positioning}
+\usepackage{placeins}
+\usepackage{subcaption}
+
+
 
 
 % we recommend using biblatex for references
@@ -86,7 +91,8 @@
 %\listofequations
 \ClearPage
 
-\setcounter{page}{1}
+%was set to {1}, maybe {2} is not JKU conform
+\setcounter{page}{2}
 \pagenumbering{arabic}
 
 \include{01-introduction}
