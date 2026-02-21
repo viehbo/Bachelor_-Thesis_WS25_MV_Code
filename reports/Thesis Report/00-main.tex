@@ -8,6 +8,15 @@
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{array}
+\usepackage{wrapfig}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit}
+%%\usetikzlibrary{positioning}
+\usepackage{placeins}
+\usepackage{subcaption}
+
+
+
 
 % we recommend using biblatex for references
 \usepackage[
@@ -82,12 +91,16 @@
 %\listofequations
 \ClearPage
 
-\setcounter{page}{1}
+%was set to {1}, maybe {2} is not JKU conform
+\setcounter{page}{2}
 \pagenumbering{arabic}
 
 \include{01-introduction}
 \include{02-related_work}
-\include{reports/Thesis Report/03-solution}
+\include{03-solution}
+\include{04-use-case}
+\include{reports/Thesis Report/05-discussion}
+\include{reports/Thesis Report/06-conclusion}
 
 
 \listoffigures

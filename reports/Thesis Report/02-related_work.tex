@@ -1,7 +1,60 @@
-
 \chapter{Related Work}
 
+The ERA5 dataset is widely used in climate and cryosphere research.
+Numerous glacier-related studies are based on ERA5-derived products, for example the work of Fabien Maussion and collaborators \parencite{maussion_publications}.
 
-a lot of text with cites\cite{python_maps}
-\\
-cite of "Bergauf"\cite{bergauf_1_2025}
+\begin{wrapfigure}{r}{0.65\textwidth}
+  \centering
+  \includegraphics[width=0.55\textwidth]{reports/Thesis Report/figures/era5_ts_global_glaciers.png}
+  \caption{Temperature change at glacier locations (area-weighted) compared to the global mean \cite{maussion_publications}.}
+  \label{fig:era5_ts_global_glacier}
+\end{wrapfigure}
+
+As shown in Figure~\ref{fig:era5_ts_global_glacier}, the temperature change at glacier locations is stronger than the global average.
+However, these studies typically focus on static analyses, and interactive exploration of the data is usually not possible.
+
+\par\medskip
+
+Copernicus Climate Change Service provides as a starting point several Jupyter Notebooks, where ERA5 data can be discovered \parencite{earthdatahub_tutorials}.
+The interaction for a user is very restricted and usually requires changing or adding code.
+
+\begin{wrapfigure}{r}{0.45\textwidth}
+  \centering
+  \includegraphics[width=0.55\textwidth]{reports/Thesis Report/figures/german_temperature.png}
+  \caption{Average temperature in Germany, October 2018 \cite{earthdatahub_tutorials}.}
+  \label{fig:german_temperature}
+\end{wrapfigure}
+
+\vspace{1em}
+
+An example visualization is shown in Figure~\ref{fig:german_temperature}.
+This is grat to make the first climps on it, but not enough to decide, is the data are suitable for a potetial ML task.
+
+\vspace{1em}
+
+WGMS provides with the \textit{Fluctuations of Glaciers Browser} \cite{arcgis_experience_836c66d} a browser tool to discover glacier on a map.
+Over 100,000 glaciers are coverd.
+One can get insights about the database from this glacier measurements.
+But whats not possible, is to interact with measurements or directly compare them.
+What is missing is an interactive tool to gain insights into ERA5 weather data and WGMS glacier data.
+
+
+\vspace{1em}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.70\textwidth]{reports/Thesis Report/figures/dachstein_glacier.png}
+  \caption{Dachstein glaciers visualized via the \textit{Fluctuations of Glaciers Browser} \cite{arcgis_experience_836c66d}.}
+  \label{fig:dachstein_glacier}
+\end{figure}
+
+\vspace{1em}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.2\textwidth]{reports/Thesis Report/figures/surface_temp_berlin.png}
+  \caption{Temperature development over time in Berlin \cite{earthdatahub_tutorials}.}
+  \label{fig:surface_temp_berlin}
+\end{figure}

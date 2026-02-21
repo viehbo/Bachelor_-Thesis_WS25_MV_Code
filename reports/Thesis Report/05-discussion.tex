@@ -1,0 +1,31 @@
+\chapter{discussion}
+
+For temperature data and even more for wind data from ERA5, this tools can provide very useful insights. The low computational effort combined with the easy to use interface makes it absolute useful.
+At the beginning of this project, a scope was set up to focus on keypoints due to natural time constraints. Now we can take a look into reasonably limitations and practical next steps.
+
+
+\section{Limitations}
+
+\paragraph{Variables from ERA5}
+Given that ERA5-Land consists of 49 variables, the implemented two variables can only represent a starting point.
+
+\paragraph{WGMS data}
+For the glaciers, only mass balance is considered. Including additional parameters, such as glacier area, could provide further insights. However, this would require a deeper understanding of glacier-specific data structures in order to ensure comparability.
+
+\paragraph{Statistical tools}
+Currently, a user can choose one of 4 trend line methods. Also mean, minimum, maximum and the number of the selected data points are provided. For deeper investigation, more advanced statistical methods might be beneficial. 
+
+\paragraph{Data loading}
+ERA5 data must be downloaded from Copernicus Climate Data Store (CDS)\parencite{era5_single_levels}. This can be done either by selecting the data of choice via web interface and download as a batch in ZIP format or by using an API. However, the amount of data (batch size) is limited. It also can take hours, if the batch size is towards to the allowed limit. So this is an inherent limitation from the data source about data-fetching. This needs to taken into account 
+
+
+
+\section{future work}
+
+Hence the tools showed its usability in deeply discovering weather data from ERA5, there is also the biggest potential of improvements.
+
+\paragraph{Adding variables}
+Implement more variables like \textit{Snowfall}, \textit{Snow depth} and \textit{Snow density} are the next logical step. Changes in the realtion of this three values can be potential features for a predation task.
+
+\paragraph{Combination of ERA5 datasets}
+More advanced but very interesting would be the implemetation of values on several levels. For example the dataset \textit{ERA5 hourly data on pressure levels} provides variables like \textit{Fraction of cloud cover} and \textit{Temperature} on 19 atmospheric pressure levels. 

@@ -1,0 +1,73 @@
+\chapter{Use Case}
+
+\section{Hypothesis}
+
+Wind speed and direction changed over the years, to a stronger wind from south. This significantly influences the glacier melt. \\
+
+This hypothesis is based on the assumption that due to general higher temperatures, the atmospheric pressure over the Mediterranean Sea increases on average, compared to the Northern Alps region. And as a result, more south Foehn days are seen over the main ridge, which causes temporarily high temperatures in affected areas.
+
+\section{Proof with glaciVis}
+
+\subsection{Dataset}
+
+The downloaded data are the following:
+
+\vspace{1em}
+Dataset: \textit{ERA5 hourly data on single levels from 1940 to present}
+
+\begin{table}[htbp]
+\centering
+\caption{Wind variables at 10\,m height from ERA5.}
+\label{tab:era5_wind_variables}
+
+\begin{tabular}{lll}
+\toprule
+Short name & Unit & Description \\
+\midrule
+v10 & m\,s$^{-1}$ & 10\,m V wind component \\
+u10 & m\,s$^{-1}$ & 10\,m U wind component \\
+\bottomrule
+\end{tabular}
+
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{Data selection parameters for ERA5 retrieval.}
+\label{tab:data_selection_parameters}
+
+\begin{tabular}{lll}
+\toprule
+Category & Parameter & Value \\
+\midrule
+Temporal & Time frame & 01.01.1980 -- 05.01.2025 \\
+Temporal & Daily hours & 00:00, 08:00, 16:00 \\
+Spatial  & Longitude & 09.00° West -- 17.00° East \\
+Spatial  & Latitude & 46.00° South -- 49.00° North \\
+\bottomrule
+\end{tabular}
+
+\end{table}
+
+\newpage
+
+\subsection{Overview in the map}
+
+Once the data are loaded, the visualization on the map provides a broad overview.
+Shown are the average values (arithmetic mean) of the whole, unrestricted time frame.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=1.0\textwidth]{reports/Thesis Report/figures/usecase_wind_map.png}
+  \caption{Average wind speed and direction as an overview}
+  \label{fig:usecase_wind_map}
+\end{figure}
+
+The first remarkable pattern is that areas of high wind can only be found in flat regions. The western area of Munich and the south-western area near Vienna are most prominent.
+
+This is unexpected. High wind speeds are typically associate with high mountains. But along the main ridge, the wind speed is lowest in average.
+
+One possible reason could be, that through averaging the wind speed is more equal distributed in all directions an kinda cancels out in the calculation. So lets take a look into two specific points, one in Vienna and one in Eastern Tirol, and compare them.
+
+
