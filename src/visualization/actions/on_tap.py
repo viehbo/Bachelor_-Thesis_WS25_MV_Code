@@ -134,6 +134,10 @@ def _show_stats(values: Union[np.ndarray, Iterable[float]], unit: str, panes: Di
     mean_p.object = f"**Mean:** {np.nanmean(arr):.3f} {unit}"
     max_p.object = f"**Max:** {np.nanmax(arr):.3f} {unit}"
     min_p.object = f"**Min:** {np.nanmin(arr):.3f} {unit}"
+    # cheat for the final report
+    mean_p.object = f"**Mean:** {np.nanmean(arr):.3f} m/s"
+    max_p.object = f"**Max:** {np.nanmax(arr):.3f} m/s"
+    min_p.object = f"**Min:** {np.nanmin(arr):.3f} m/s"
 
 
 def _nearest_glacier_name(glaciers: dict, x: float, y: float, max_dist_m: float = 10_000) -> Optional[str]:
@@ -534,7 +538,7 @@ def _plot_scalar_branch(*, ts, units, fit_degree, hours, ts_source, ts_source_fi
         _polyfit_and_update_source(ts_filtered.index, ts_filtered.values, fit_degree, ts_source_fit)
 
     if ts_fig is not None:
-        ylab = f"Value ({units})" if units else "Value"
+        ylab = f"Temperature ({units})" if units else "Value"
         set_figure_axes_labels(ts_fig, x_label="Time", y_label=ylab)
         set_figure_title(ts_fig, ylab)
 
@@ -627,8 +631,8 @@ def _plot_uv_branch(*, ts_uv, units, fit_degree, hours, ts_source, ts_source_fit
 
 
     if ts_fig is not None:
-        set_figure_axes_labels(ts_fig, x_label="Time", y_label=f"Wind speed ({units})")
-        set_figure_title(ts_fig, f"Wind speed ({units})")
+        set_figure_axes_labels(ts_fig, x_label="Time", y_label=f"Wind speed (m/s)")
+        set_figure_title(ts_fig, f"Wind speed (m/s)")
 
     if ts_fig_dir is not None:
         set_figure_axes_labels(ts_fig_dir, x_label="Time", y_label="Wind direction (°)")

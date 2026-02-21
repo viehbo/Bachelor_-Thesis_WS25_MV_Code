@@ -8,7 +8,7 @@ PALETTE10 = list(Category10[10])
 
 def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Time", show_fit=True, x_range=None):
     kwargs = dict(
-        height=260,
+        height=460,
         width=900,
         x_axis_type="datetime",
         tools="pan,wheel_zoom,reset,save",
@@ -53,6 +53,8 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
     fig.legend.click_policy = "hide"
     fig.legend.location = "top_left"
 
+
+
     # IMPORTANT:
     # Do NOT add a second Legend() to this figure.
     # Keep a reference to the single, existing legend for yearly mode updates.
@@ -62,7 +64,7 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
         fig._main_legend = None
 
     hover = HoverTool(
-        tooltips=[("Date", "@t{%F %H:%M}"), (y_label or "Value", "@y{0.00}")],
+        tooltips=[("Date", "@t{%F %H:%M}"), (y_label or "Temperature", "@y{0.00}")],
         formatters={"@t": "datetime", "@y": "numeral"},
         mode="vline",
         renderers=[line_raw],
@@ -73,6 +75,9 @@ def make_line_plot_1(title="Clicked point: time series", y_label="", x_label="Ti
     fig.yaxis.axis_label = y_label
     fig.xaxis.axis_label = x_label
     fig.xaxis.formatter = DatetimeTickFormatter(hours="%Y-%m-%d %H:%M", days="%Y-%m-%d")
+
+    fig.min_border_bottom = 70
+    fig.xaxis.major_label_standoff = 8
 
     yearly_sources = []
     yearly_renderers = []

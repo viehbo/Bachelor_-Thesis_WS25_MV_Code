@@ -149,7 +149,8 @@ w_hours = pn.widgets.MultiChoice(
 )
 
 
-w_value_filter_enabled = pn.widgets.Checkbox(name="Value filter", value=False)
+# the "value filter" checkbox is set to non-visible
+w_value_filter_enabled = pn.widgets.Checkbox(name="Value filter", value=False, visible=False)
 
 w_temp_range = pn.widgets.IntRangeSlider(
     name="Temperature range (°C)",
@@ -173,7 +174,7 @@ w_dir_range = pn.widgets.IntRangeSlider(
 
 w_glacier_multiplier_plot = pn.widgets.FloatSlider(
     name="Multiplier",
-    start=-10.0, end=10.0, value=10.0, step=0.1,
+    start=-40.0, end=40.0, value=10.0, step=0.1,
     orientation="horizontal",
     width=220,
     visible=True,
@@ -181,7 +182,7 @@ w_glacier_multiplier_plot = pn.widgets.FloatSlider(
 
 w_glacier_offset_plot = pn.widgets.FloatSlider(
     name="Offset",
-    start=-20.0, end=20.0, value=0.0, step=0.1,
+    start=-40.0, end=40.0, value=0.0, step=0.1,
     orientation="horizontal",
     width=220,
     visible=True,
@@ -348,7 +349,8 @@ def _sync_value_filter_state(event=None):
 def _update_value_filter_visibility():
     kind = _last.get("data_kind")
     # Always show the master enable
-    w_value_filter_enabled.visible = True
+    # to not turn on the visibility of the checkbox on
+    #w_value_filter_enabled.visible = True
 
     # Show only the relevant sliders
     w_temp_range.visible = (kind == "temperature")
@@ -761,7 +763,7 @@ plots = pn.Column(
     ts_with_left_sliders,
     ts_pane_dir,
     sizing_mode="stretch_both",
-    min_height=820,
+    min_height=990,
 )
 
 
