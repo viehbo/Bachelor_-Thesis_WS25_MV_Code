@@ -1,12 +1,15 @@
 \chapter{Use Case}
+\label{ch:use_case}
+
+The use case demonstrates how the tool can support exploratory preselection of meteorological variables for glacier related machine learning tasks. The objective is not to prove causality, but to assess whether wind magnitude and/or direction exhibits spatial or temporal patterns that justify further modeling.
 
 \section{Hypothesis}
 
-Wind speed and direction changed over the years, to a stronger wind from south. This significantly influences the glacier melt. \\
+The expected pattern is, that wind speed and direction changed over the years, to a stronger wind from south. This significantly influences the glacier melt. \\
 
 This hypothesis is based on the assumption that due to general higher temperatures, the atmospheric pressure over the Mediterranean Sea increases on average, compared to the Northern Alps region. And as a result, more south Foehn days are seen over the main ridge, which causes temporarily high temperatures in affected areas.
 
-\section{Proof with glaciVis}
+\section{Exploration with GlaciVis}
 
 \subsection{Dataset}
 
@@ -68,6 +71,85 @@ The first remarkable pattern is that areas of high wind can only be found in fla
 
 This is unexpected. High wind speeds are typically associate with high mountains. But along the main ridge, the wind speed is lowest in average.
 
-One possible reason could be, that through averaging the wind speed is more equal distributed in all directions an kinda cancels out in the calculation. So lets take a look into two specific points, one in Vienna and one in Eastern Tirol, and compare them.
+One possible explanation is that averaging over all time steps causes winds from different directions to partially cancel out, reducing the apparent magnitude in regions with variable wind directions.
+To investigate this further, two specific grid points are selected for comparison: one near Vienna and one in Eastern Tirol.
 
+
+
+
+\begin{figure}[htbp]
+  \centering
+
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{reports/Thesis Report/figures/usecase_wind_vienna_zoom.png}
+    \caption{Selected data point in Vienna.}
+    \label{fig:usecase_wind_vienna_zoom}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{reports/Thesis Report/figures/usecase_wind_tirol_zoom.png}
+    \caption{Selected data point over Eastern Tirol.}
+    \label{fig:usecase_wind_tirol_zoom}
+  \end{subfigure}
+
+  \caption{Selection of the two data points to compare them in the temporal plot}
+  \label{fig:usecase_wind_map_zoom}
+\end{figure}
+
+
+\newpage
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{reports/Thesis Report/figures/usecase_wind_vienna_lineplot.png}
+  \caption{Wind speed over Vienna}
+  \label{fig:usecase_wind_vienna_lineplot}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{reports/Thesis Report/figures/usecase_wind_tirol_lineplot.png}
+  \caption{Wind speed over Vienna}
+  \label{fig:usecase_wind_tirol_lineplot}
+\end{figure}
+
+The temporal plot clearly shows, that the wind speed on average but also in peaks are much higher in Vienna than in Eastern Tirol.
+
+This is counterintuitive and need further investigation. At least the fact, that high wind-speed peaks are completely missing in the alps region.
+
+\vspace{1em}
+
+\newpage
+
+But there could be nevertheless a underlying trend, which provides information about the glacier development.
+
+So lets integrate the glacier data from the nearest glacier to this data point near Matrei in Eastern Tirol.
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{reports/Thesis Report/figures/usecase_wind_glacier_trend.png}
+  \caption{Wind-speed trend vs. glacier mass-balance trend}
+  \label{fig:usecase_wind_glacier_trend}
+\end{figure}
+
+There is still no pattern visible which supports the hypothesis.
+
+Note: The glacier trend line is manipulated via the interactions and even inverted. This is to get both trend lines closer together.
+
+
+
+\paragraph{Findings}
+
+The wind speed shows no clear trend over the years in this data, and no
+obvious influence on the glacier mass balance is visible. The glacier
+trend line is fitted and positioned using a multiplier and an offset to allow visual comparison on the same axis.
+
+This suggests that the 10\,m wind components do not carry sufficient information to serve as predictors for glacier mass balance.
+However, the broader ERA5 family offers numerous additional wind-related variables such as wind at pressure levels, wind gusts, or directional statistics that may better capture the relevant atmospheric dynamics.
+Identifying which variables lack predictive value early in the process avoids committing computational resources to unsuitable
+features and helps narrow the search toward more promising candidates.
 

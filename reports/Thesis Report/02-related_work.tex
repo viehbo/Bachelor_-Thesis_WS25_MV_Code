@@ -1,46 +1,60 @@
 \chapter{Related Work}
+\label{sec:related_work}
 
-The ERA5 dataset is widely used in climate and cryosphere research.
-Numerous glacier-related studies are based on ERA5-derived products, for example the work of Fabien Maussion and collaborators \parencite{maussion_publications}.
+\section{ERA5 in Glacier and Climate Research}
 
-\begin{wrapfigure}{r}{0.65\textwidth}
+The ERA5 reanalysis data set provided by the Copernicus Climate Change Service has become a standard data source in climate and cryosphere research. It offers physically consistent atmospheric and land-surface variables at high spatial and temporal resolution over multiple decades. Due to its global coverage and temporal continuity, ERA5 is widely used to investigate long-term climate trends and their impact on glacier systems.
+
+A representative example is the work of Maussion et al., who analyses temperature trends at glacier locations using ERA5-derived data products \parencite{maussion_publications}. Such studies typically focus on temperature evolution or precipitation patterns influencing glacier mass balance.
+
+\begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.55\textwidth]{reports/Thesis Report/figures/era5_ts_global_glaciers.png}
+  \includegraphics[width=0.65\textwidth]{reports/Thesis Report/figures/era5_ts_global_glaciers.png}
   \caption{Temperature change at glacier locations (area-weighted) compared to the global mean \cite{maussion_publications}.}
   \label{fig:era5_ts_global_glacier}
-\end{wrapfigure}
+\end{figure}
 
-As shown in Figure~\ref{fig:era5_ts_global_glacier}, the temperature change at glacier locations is stronger than the global average.
-However, these studies typically focus on static analyses, and interactive exploration of the data is usually not possible.
+As illustrated in Figure~\ref{fig:era5_ts_global_glacier}, temperature trends at glacier locations may exceed the global mean. These findings underline the scientific relevance of combining meteorological reanalysis data with glacier observations. 
 
-\par\medskip
+However, most such analyses are conducted in script-based environments using predefined processing pipelines. Visual outputs are typically static and generated for publication purposes. Interactive exploration of alternative parameter settings, spatial subsets, or temporal windows is generally not supported within these workflows.
 
-Copernicus Climate Change Service provides as a starting point several Jupyter Notebooks, where ERA5 data can be discovered \parencite{earthdatahub_tutorials}.
-The interaction for a user is very restricted and usually requires changing or adding code.
+\newpage
 
-\begin{wrapfigure}{r}{0.45\textwidth}
+\section{ERA5 Access and Tutorial-Based Workflows}
+
+To facilitate data access, the Copernicus Climate Change Service provides Jupyter Notebook tutorials demonstrating how ERA5 data can be downloaded, processed, and visualized \parencite{earthdatahub_tutorials}. These tutorials serve as an entry point for researchers working with reanalysis products.
+
+\begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.55\textwidth]{reports/Thesis Report/figures/german_temperature.png}
-  \caption{Average temperature in Germany, October 2018 \cite{earthdatahub_tutorials}.}
+  \includegraphics[width=0.65\textwidth]{reports/Thesis Report/figures/german_temperature.png}
+  \caption{Average temperature in Germany, October 2018. From \textit{How to work with ERA5 single levels on Earth Data Hub} \cite{earthdatahub_tutorials}.}
   \label{fig:german_temperature}
-\end{wrapfigure}
-
-\vspace{1em}
+\end{figure}
 
 An example visualization is shown in Figure~\ref{fig:german_temperature}.
-This is grat to make the first climps on it, but not enough to decide, is the data are suitable for a potetial ML task.
+While such notebooks provide valuable demonstrations of data handling and visualization principles, interaction is limited.
+Adjusting parameters typically requires manual modification of source code.
+This approach presupposes programming expertise and does not offer a structured interface for systematic exploratory data analysis.
 
-\vspace{1em}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.70\textwidth]{reports/Thesis Report/figures/surface_temp_berlin.png}
+  \caption{Temperature development over time in Berlin \cite{earthdatahub_tutorials}.}
+  \label{fig:surface_temp_berlin}
+\end{figure}
 
-WGMS provides with the \textit{Fluctuations of Glaciers Browser} \cite{arcgis_experience_836c66d} a browser tool to discover glacier on a map.
-Over 100,000 glaciers are coverd.
-One can get insights about the database from this glacier measurements.
-But whats not possible, is to interact with measurements or directly compare them.
-What is missing is an interactive tool to gain insights into ERA5 weather data and WGMS glacier data.
+Figure~\ref{fig:surface_temp_berlin} illustrates a classical time-series representation. While suitable for illustrating temporal development, such isolated plots do not inherently support multidimensional feature assessment or coordinated spatial-temporal interaction.
 
 
-\vspace{1em}
 
+In particular, coordinated spatial and temporal interaction within a unified environment is not supported. As a consequence, iterative hypothesis testing and feature-oriented data screening remain cumbersome.
+
+
+
+
+\section{Glacier Monitoring Platforms}
+
+Glacier-specific observations are commonly accessed through the World Glacier Monitoring Service (WGMS). The \textit{Fluctuations of Glaciers Browser} provides web-based access to glacier locations, mass balance measurements, and related metadata \parencite{arcgis_experience_836c66d}.
 
 \begin{figure}[htbp]
   \centering
@@ -49,12 +63,24 @@ What is missing is an interactive tool to gain insights into ERA5 weather data a
   \label{fig:dachstein_glacier}
 \end{figure}
 
-\vspace{1em}
+Although more than 100,000 glaciers are included in the database, interaction remains restricted to predefined views and static interface components. Direct comparison between meteorological data and glacier measurements is not supported within the same  environment. Temporal exploration and spatial inspection are separated, and dynamic filtering or variable combination is limited.
 
+\newpage
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.2\textwidth]{reports/Thesis Report/figures/surface_temp_berlin.png}
-  \caption{Temperature development over time in Berlin \cite{earthdatahub_tutorials}.}
-  \label{fig:surface_temp_berlin}
-\end{figure}
+\section{Identified Research Gap}
+
+From a machine learning perspective, exploratory visualization plays a critical role in feature preselection. Before training predictive models, it is necessary to assess whether variables exhibit stable temporal patterns, spatial heterogeneity, or meaningful correlations with target phenomena such as glacier mass balance.
+
+Neither ERA5 tutorial notebooks nor the WGMS browser provide an integrated environment that supports:
+
+\begin{itemize}
+    \item Structured dataset selection,
+    \item Parameter filtering and aggregation,
+    \item Coordinated spatial visualization,
+    \item Interactive temporal analysis,
+    \item Direct comparison between ERA5 meteorological variables and WGMS glacier measurements.
+\end{itemize}
+
+Thus, a methodological gap exists between large-scale climate datasets and interactive tools designed for structured feature oriented exploration.
+
+The objective of this thesis is to address this gap by developing an integrated visualization framework that enables coordinated spatial and temporal exploration of ERA5 data and glacier observations. The system is intended to support systematic data preselection for potential machine learning applications.

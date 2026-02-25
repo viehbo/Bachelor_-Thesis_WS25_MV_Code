@@ -3,7 +3,16 @@
 \ClearPage
 \pdfbookmark[1]{Abstract}{sec:abstract-en}
 \chapter*{Abstract}
+In machine learning applications for climate research, the selection and
+understanding of input features is a critical task for effective model
+development. This is particularly challenging for meteorological reanalysis datasets such as ERA5, which offer a large number of atmospheric and
+land-surface variables at high spatial and temporal resolution, resulting in data volumes that prohibit undirected exploration (see Chapter~\ref{ch:introduction}).
 
-Data selection is one of the most important parts in every ML (Machine Learning) Task. In case of weather data, one faces a huge variety of different values with often high density. Clearly much more data than consumer hardware can process. 
-Meteorologically, glaciers can be seen as a scale of climate change. By finding the most influential factors, the glacier changes might be much better predictable. Even more, our water supply in the Alps region could be better foreseen, caused by global heating. \\
-In this project, one can discover ERA5 weather data by interacting with it. The conept is, to give a maximum of felxibility by keeping the interface intuitive. This gives deep insight of the data and therefore the basis, if and for what they can bes used. This is crucial for an successful ML project, safes a lot of time on model selection. Due to that, such tasks became more cost efficient and environmental friendly. 
+This thesis presents \textit{glaciVis}, an interactive visualization tool designed to support structured feature exploration of ERA5 data in the context of glacier research. The tool combines a preprocessing pipeline for converting ERA5 and WGMS glacier data into analysis-ready formats with a coordinated spatial-temporal interface built on Panel and Bokeh.
+Users can select datasets, configure filtering and aggregation parameters, inspect spatial patterns on an interactive map, and analyze temporal trends through linked time series plots, including overlay of glacier mass balance
+observations.
+
+The system is demonstrated through a use-case investigating the relationship between wind patterns and glacier mass balance in the Alps.
+While the explored hypothesis did not reveal a clear wind-driven signal, the investigation illustrated how the tool enables a systematic and visual hypothesis testing before going to feature selection for predictive modeling.
+The resulting framework provides a foundation for extending the
+analysis to additional ERA5 variables and integrating automated statistical methods in future work.

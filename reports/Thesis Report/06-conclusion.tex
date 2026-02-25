@@ -1,6 +1,10 @@
-\chapter{conclusion}
+\chapter{Conclusion}
+This thesis presents \textit{glaciVis}, an interactive visualization tool designed to support data preselection for machine learning applications in climate and glacier research.
+By combining structured preprocessing with coordinated spatial and temporal views, the tool enables informed feature assessment prior to model development.
 
-The very first idea to visually compare glacier data and meteorological data in some kind of plot, does work just partly.
-One reason for that is the different nature of glacier observations and reanalyzed ERA5 data. Even reference glaciers are measured/claculated there changes once a year. Few years ago, not even that.
+During the development process, the tool proved to be well suited for gaining deep insights into meteorological data.
+It allows users to precisely assess whether a dataset is suitable for a given task and, if so, which temporal resolution and spatial extent are necessary. The use case in Chapter~\ref{ch:use_case} illustrated this concretely: the exploration of wind variables revealed that the available 10\,m components in ERA5-Land are unlikely to carry predictive information for glacier mass balance, while
+suggesting that other ERA5 products may contain more relevant variables.
 
-During the developent process, it turns out, this tool is surpringsingly well suited to get deep insights into meteorological data. So one can precisely decide, if a dataset is suitable for some task. And if yes, which resolution in time and which area is necessary.
+The project demonstrates that interactive visualization can serve as a critical intermediate step between raw data acquisition and automated learning methods.
+It provides transparency in feature selection and supports hypothesis driven exploration.

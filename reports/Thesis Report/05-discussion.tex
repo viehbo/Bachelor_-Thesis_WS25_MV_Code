@@ -1,13 +1,19 @@
-\chapter{discussion}
+\chapter{Discussion}
+The use case presented in Chapter~\ref{ch:use_case} demonstrated that
+\textit{glaciVis} can provide meaningful insights into ERA5 data with
+comparatively low computational effort. For temperature, the tool enabled direct visual comparison with glacier mass balance trends. For wind, the exploration revealed that the available 10\,m variables in ERA5 likely do not capture the atmospheric dynamics relevant to glacier melt a finding that, while negative, illustrates the value of structured exploratory analysis before committing to feature selection.
 
-For temperature data and even more for wind data from ERA5, this tools can provide very useful insights. The low computational effort combined with the easy to use interface makes it absolute useful.
-At the beginning of this project, a scope was set up to focus on keypoints due to natural time constraints. Now we can take a look into reasonably limitations and practical next steps.
+At the same time, the current implementation represents a deliberately scoped first version. The following sections discuss its limitations and outline practical directions for future development.
 
 
 \section{Limitations}
 
 \paragraph{Variables from ERA5}
 Given that ERA5-Land consists of 49 variables, the implemented two variables can only represent a starting point.
+
+From an AI perspective, the current implementation focuses on single-variable exploration. Multivariate analysis and statistical correlation measures could further improve feature relevance assessment.
+
+Moreover, the tool does not yet support automated feature ranking or dimensionality reduction techniques. These aspects could be integrated in future work to bridge the gap between visualization and model training.
 
 \paragraph{WGMS data}
 For the glaciers, only mass balance is considered. Including additional parameters, such as glacier area, could provide further insights. However, this would require a deeper understanding of glacier-specific data structures in order to ensure comparability.
@@ -20,12 +26,23 @@ ERA5 data must be downloaded from Copernicus Climate Data Store (CDS)\parencite{
 
 
 
-\section{future work}
+\section{Future Work}
+Since the tool demonstrated its value in exploring ERA5 weather data
+interactively, the most promising directions for improvement lie in extending
+both its analytical capabilities and its data coverage.
 
-Hence the tools showed its usability in deeply discovering weather data from ERA5, there is also the biggest potential of improvements.
+\paragraph{Refining the user interface:}
+The current interface follows a structured workflow, but has not yet been evaluated with external users. Collecting feedback through usability testing would help identify areas where the interaction could be made more intuitive.
+Before adding further features, the interface layout should be revised to ensure that additional functionality remains accessible and does not increase complexity.
 
-\paragraph{Adding variables}
-Implement more variables like \textit{Snowfall}, \textit{Snow depth} and \textit{Snow density} are the next logical step. Changes in the realtion of this three values can be potential features for a predation task.
+\paragraph{Adding variables:}
+Incorporating additional ERA5-Land variables such as \textit{Snowfall},
+\textit{Snow depth}, and \textit{Snow density} is the next logical step. Changes in the relation between these three quantities for instance, a decrease in snow density at constant depth may serve as meaningful features
+for a prediction task targeting glacier mass balance.
 
-\paragraph{Combination of ERA5 datasets}
-More advanced but very interesting would be the implemetation of values on several levels. For example the dataset \textit{ERA5 hourly data on pressure levels} provides variables like \textit{Fraction of cloud cover} and \textit{Temperature} on 19 atmospheric pressure levels. 
+\paragraph{Combination of ERA5 datasets:}
+A more advanced extension would be the integration of variables across
+multiple atmospheric levels. For example, the dataset \textit{ERA5 hourly data on pressure levels} provides variables such as \textit{Fraction of cloud cover}
+and \textit{Temperature} on 19 atmospheric pressure levels, which could reveal vertical atmospheric dynamics not captured by the surface-level data currently used.
+
+
