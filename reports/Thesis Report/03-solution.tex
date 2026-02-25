@@ -1,23 +1,29 @@
 \chapter{Visualization}
 
-The objective is to create a interactive tool as a web-interface, with that a person can intuitively gain insights to the data. The project from the Seminar in AI already gives some learning's, which are the stating point of this work.
+The objective of this project is not just the development of an interactive visualization tool, but the support of a structured data preselection process for potential machine learning applications.
+The visualization component serves as an analytical instrument to explore correlations, assess data quality, and identify relevant feature candidates before model training.
 
-\vspace{1em}
-\textbf{The concept consists of the following parts:}
+Within the context of Artificial Intelligence and Computer Graphics, the work combines efficient data handling with interactive visual exploration. Large-scale climate datasets such as ERA5 are high-dimensional and spatio-temporal.
+The Direct application of machine learning methods without prior inspection may lead to inappropriate feature selection or unnecessary computational cost. Interactive visualization enables hypothesis checking, feature screening, and validation before committing to automated modeling approaches.
 
-\begin{itemize}
-    \item Set conceptual design choices
-    \item Collecting ERA5 and glacier data
-    \item Data preprocessing
-    \item Setup the framework of the visualization
-    \item Implement one element / function after another
-\end{itemize}
+The \textit{glaciVis} therefore acts as a bridge between raw geospatial climate data and structured machine learning workflows.
 
 
-\section{Conceptual design choices}
+\section{Conceptual Design Choices}
 \label{sec:conceptual_design_choices}
 
-Goal is to find the optimal tradeoff between a maximum of interactivity and a intuative interface. For this, the user interface is seperated into 4 sections.
+The central design goal is to provide a structured environment for data exploration that supports feature understanding. ERA5 and WGMS datasets contain spatial and temporal dimensions that must be analyzed jointly. According to Aigner et al. \parencite[p.380]{aigner_time_oriented_data}, time-oriented data benefit from coordinated views that combine spatial context with temporal detail. 
+
+The interface is therefore separated into four functional sections:
+
+\begin{itemize}
+    \item Data definition (file selection)
+    \item Parameter configuration (selection and filtering)
+    \item Spatial inspection
+    \item Temporal inspection
+\end{itemize}
+
+\newpage
 
 \begin{figure}[htbp]
 \centering
@@ -25,7 +31,7 @@ Goal is to find the optimal tradeoff between a maximum of interactivity and a in
   box/.style={draw, line width=0.6pt, align=center, minimum height=1.2cm},
   smallbox/.style={box, minimum width=5.8cm},
   tallbox/.style={box, minimum width=4.2cm, minimum height=6.2cm},
-  widebox/.style={box, minimum width=10.9cm},
+  widebox/.style={box, minimum width=10.6cm},
   font=\small
 ]
 
@@ -41,31 +47,52 @@ Goal is to find the optimal tradeoff between a maximum of interactivity and a in
 
 \end{tikzpicture}
 \caption{Conceptual layout of the user interface, showing the separation of data selection, parameter controls, and visualization views.}
-\label{fig:ui_layout}
+
 \end{figure}
 
-The workflow is starting from the top-left and ends on the bottom-right. Like when reading a book. This should provide the basic structure for an intuitive handling.
-Of course, in all sections, interaction will be possible. But they will influence each other only top-down:
-\textbf{File selection} $\rightarrow$ \textbf{Adjustments and controls} $\rightarrow$ \textbf{Map} $\rightarrow$ \textbf{Line Plot}
+The workflow follows a top-down and left-to-right logic. Interaction starts with data definition and ends with temporal analysis. This controlled interaction flow reduces cognitive complexity and prevents inconsistent view states, as emphasized in time-oriented visualization research \parencite{aigner_time_oriented_data}.
 
+\[
+\textbf{File selection} \rightarrow 
+\textbf{Adjustments and controls} \rightarrow 
+\textbf{Map} \rightarrow 
+\textbf{Line plot}
+\]
+
+The restriction of influence to a single direction ensures transparency, reproducibility, and a clear analytical sequence.
+Users first define the data scope, then configure variables, inspect spatial structure, and finally analyze temporal behavior.
+
+
+\newpage
 
 \section{Data Preprocessing}
 
-ECMWF provides ERA5 data in GRIB\cite{ecmwf_grib_explanation} format. The GRIB format is designed to storing data and distribute them. There are Python libraries, which can read this format but for the visualisation task in this project, GRIB-files are not ideal.
+ERA5 data are provided in GRIB format \parencite{ecmwf_grib_explanation}. While GRIB is efficient for distribution and storage, it is not optimal for interactive exploration. The format requires decoding before structured slicing of spatio-temporal subsets is possible.
 
-According to \textcite[pp.~85--87]{python_maps}, the library \textit{Xarray} is optimized for performing labeled multi-dimensional computations and subsequent visualization of geospatial data. 
-Working directly with GRIB files, however, can create a computational bottleneck in this environment due to their structure and decoding requirements. 
-Both \textit{Python Maps} \parencite[p.~88]{python_maps} and the official Xarray documentation \parencite{xarray_documentation} recommend the use of the NetCDF format for efficient storage and processing of scientific data. 
-NetCDF provides a self-describing and platform-independent data model that is particularly well suited for climate and meteorological datasets \parencite{netcdf_documentation}.
+According to \textcite[pp.~85--87]{python_maps}, the Python library \textit{Xarray} is optimized for labeled multi-dimensional computations and geospatial data handling. Both \textit{Python Maps} \parencite[p.~88]{python_maps} and the official Xarray documentation \parencite{xarray_documentation} recommend NetCDF as an efficient storage format. NetCDF provides a self-describing and platform-independent structure that supports indexed access and slicing \parencite{netcdf_documentation}.
 
+From a machine learning perspective, preprocessing serves two primary purposes:
 
+\begin{itemize}
+    \item Improving computational efficiency
+    \item Ensuring feature consistency
+\end{itemize}
 
+Converting GRIB to NetCDF enables structured slicing of spatial and temporal subsets, which is essential when extracting training samples or performing correlation analysis.
+
+Wind data are originally stored as horizontal vector components $u$ and $v$. For exploratory feature screening, the wind magnitude is computed as:
+
+\[
+|\vec{v}| = \sqrt{u^2 + v^2}
+\]
+
+This transformation reduces dimensionality and simplifies initial correlation analysis. Instead of handling a vector-valued feature, a scalar representation is sufficient for preliminary assessment.
 
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
   font=\small,
-  node distance=10mm and 10mm,
+  node distance=5mm and 5mm,
   box/.style={
     draw,
     rounded corners=2pt,
@@ -77,7 +104,7 @@ NetCDF provides a self-describing and platform-independent data model that is pa
   arrow/.style={-{Latex[length=2.2mm]}, line width=0.6pt}
 ]
 
-% ================= ERA5 branch =================
+% ERA5 branch
 \node[font=\small\bfseries] (era5_title) {ERA5 preprocessing};
 
 \node[box, below=6mm of era5_title] (era5_raw)
@@ -96,7 +123,7 @@ NetCDF provides a self-describing and platform-independent data model that is pa
 \draw[arrow] (era5_conv) -- (era5_wind);
 \draw[arrow] (era5_wind) -- (era5_out);
 
-% ================= WGMS branch =================
+% WGMS branch
 \node[font=\small\bfseries, right=35mm of era5_title] (wgms_title)
   {Glacier preprocessing (WGMS)};
 
@@ -123,40 +150,45 @@ NetCDF provides a self-describing and platform-independent data model that is pa
 \label{fig:data_preprocessing_workflow}
 \end{figure}
 
+Glacier data provided by WGMS are comparatively small in volume and stored as CSV files. Metadata (location, glacier name) and time series (mass balance values) are separated to maintain modularity. This structure facilitates later feature engineering steps, such as merging meteorological variables with glacier-specific attributes.
 
+
+
+
+
+\section{Implementation}
+\label{sec:visualization:implementation}
+
+The implementation emphasizes modularity and computational efficiency. Data processing, application logic, and visualization are separated to ensure maintainability and reproducibility.
+
+\paragraph{Technology stack:}
+The application is built on \textit{Panel} and \textit{Bokeh}. Panel provides the application framework, manages layout, and coordinates reactive components, while Bokeh renders interactive visualizations in the browser. This combination integrates Python-based data processing and responsive web-based visualization into a single workflow.
+
+\paragraph{Reactive update mechanism:}
+When a user modifies parameters, an event-driven callback mechanism updates only the affected data sources. The update process follows four steps:
+\begin{enumerate}
+    \item Update internal data selection
+    \item Trigger recalculation if necessary
+    \item Update Bokeh data sources
+    \item Refresh the visualization
+\end{enumerate}
+
+
+\paragraph{Performance considerations:}
+Several design decisions ensure that the tool remains responsive even when handling large spatio-temporal datasets:
+\begin{itemize}
+    \item Conversion of ERA5 data to NetCDF to optimize I/O performance
+    \item Precomputation of wind magnitude to reduce runtime complexity
+    \item Modular handling of glacier metadata and time series
+    \item Incremental updating of visual components to minimize latency
+\end{itemize}
 
 
 \newpage
 
+\subsection{File Selection}
 
-\section{User Interface}
-
--- Parts and interaction, design choice 
-
-\subsection{Environment and packages}
-With the learning's from the Seminar in AI project and some trial and error, the following approach seems to be optimal: \textit{Panel} as framework for the web interface + \textit{Bokeh} for the visualization and interaction elements.
-
-\vspace{1em}
-\textbf{Panel}
-
-Panel is an open-source Python library designed to streamline the development of robust tools, dashboards, and complex applications entirely within Python. With a comprehensive philosophy, Panel integrates seamlessly with the PyData ecosystem, offering powerful, interactive data tables, visualizations, and much more, to unlock, visualize, share, and collaborate on your data for efficient workflows.
-
-Its feature set includes high-level reactive APIs and lower-level callback-based APIs, enabling rapid development of exploratory applications and facilitating the creation of intricate, multi-page applications with extensive interactivity.
-
-Panel is a proud member of the HoloViz ecosystem, providing a gateway to a cohesive suite of data exploration tools.
-
-\vspace{1em}
-\textbf{Bokeh}
-
-Bokeh is a Python library for creating interactive visualizations for modern web browsers. It helps you build beautiful graphics, ranging from simple plots to complex dashboards with streaming datasets. With Bokeh, you can create JavaScript-powered visualizations without writing any JavaScript yourself.
-
-\vspace{1em}
-
-As in Conceptual design choices,\ref{sec:conceptual_design_choices}, the user interface is separated into 4 sections. 
-
-\subsection{File selection}
-
-Follow the intuitive left-to-right approach.
+The file selection area defines the temporal range and dataset configuration. Restricting dataset definition to a dedicated section ensures that subsequent analyses remain reproducible. All later interactions are explicitly linked to the selected temporal and spatial scope.
 
 \begin{figure}[htbp]
   \centering
@@ -166,30 +198,151 @@ Follow the intuitive left-to-right approach.
 \end{figure}
 
 
-\newpage
 \subsection{Adjustments and Controls}
 
-Compromise between clean structure and a maximum of freedom.
+The adjustments and controls section acts as the central configuration unit. Users can select variables, define aggregation options, and apply temporal filters.
+
+Interactive filtering is a fundamental mechanism in time-oriented data analysis. Aigner et al. describe filtering as a key technique to reduce visual clutter and focus on relevant intervals \parencite{aigner_time_oriented_data}. The implemented slider-based time restriction enables targeted inspection of specific periods.
+
+All parameter changes influence only subsequent visualization components and do not alter the original dataset definition.
 
 
-\begin{wrapfigure}{r}{0.7\textwidth}
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=0.6\textwidth]{reports/Thesis Report/figures/interface_controls.png}
   \caption{Area of controls, which are influences all upcoming visualizations}
   \label{fig:interface_controls}
-\end{wrapfigure}
-
-text text
-
-
+\end{figure}
 
 \newpage
 
+\paragraph{Temporal Filtering}
+\begin{itemize}
+    \item \textbf{Daily hour selection:} 
+    Multi-selection of synoptic hours (e.g., 00, 08, 16 UTC) for intra-day filtering of ERA5 variables.
+    
+    \item \textbf{Yearly mode:} 
+    Aggregation of time series to annual resolution.
+\end{itemize}
 
 
-\FloatBarrier
+\paragraph{Physical Range Filtering}
+\begin{itemize}
+    \item \textbf{Wind speed range (m/s):} 
+    Continuous interval restriction of values.
+    
+    \item \textbf{Wind direction range (°):} 
+    Circular angular interval selection within $[0,359]^\circ$.
+\end{itemize}
+
+
+\paragraph{Visual Parameters}
+\begin{itemize}
+    \item \textbf{Line transparency ($\alpha \in [0,1]$):} 
+    Controls opacity of rendered time series.
+\end{itemize}
+
+
+
+\paragraph{Trendline Configuration}
+
+To support the analysis of temporal developments, the application provides several methods for computing trend lines.
+These methods are available for both weather variables and glacier-related data.
+
+The numerical calculations are based on established scientific Python 
+libraries, namely \textit{NumPy} and \textit{Pandas} 
+\parencite{numpy_harris_2020, pandas_mckinney_2010}. 
+In the following, the functional principles of the implemented methods are briefly described.
+
+\vspace{1em}
+\noindent\textbf{Pre-smoothing (optional)}
+
+If enabled, the original time series $y(t)$ is smoothed using a centered moving average with window length $W$. For each time step, the mean of the values within the selected window is calculated:
+
+\begin{equation}
+\tilde{y}(t) = \frac{1}{N} \sum_{i=1}^{N} y(t_i)
+\end{equation}
+
+This optional step reduces short-term variability before applying the 
+actual trend method.
+
+\vspace{1em}
+\noindent\textbf{Rolling Mean}
+
+The rolling mean calculates a local average over a defined time window $W$. 
+For each time step, the mean of the surrounding observations is computed:
+
+\begin{equation}
+\hat{y}(t) = \frac{1}{N} \sum_{i=1}^{N} y(t_i)
+\end{equation}
+
+This method provides a simple and intuitive smoothing of the time series.
+
+\vspace{1em}
+\noindent\textbf{Exponentially Weighted Moving Average (EWMA)}
+
+The EWMA assigns higher weights to recent observations and lower weights 
+to older values. It is defined recursively as
+
+\begin{equation}
+\hat{y}_t = \alpha y_t + (1-\alpha)\hat{y}_{t-1},
+\end{equation}
+
+where $\alpha$ controls the influence of recent data. 
+This method reacts more strongly to recent changes than the rolling mean.
+
+\vspace{1em}
+\noindent\textbf{Polynomial Regression}
+
+For polynomial regression, a polynomial of degree $d$ is fitted to the time 
+axis:
+
+\begin{equation}
+\hat{y}(x) = \sum_{k=0}^{d} a_k x^k.
+\end{equation}
+
+The coefficients $a_k$ are determined using least squares minimization. This approach provides a smooth global approximation of the overall trend.
+
+\vspace{1em}
+\noindent\textbf{Annual Linear Trend}
+
+In this approach, annual mean values are first computed. A linear model is then fitted to these aggregated values:
+
+\begin{equation}
+\hat{y}(Y) = mY + b,
+\end{equation}
+
+where $m$ represents the average annual rate of change. 
+This method is particularly suitable for identifying long-term climatic trends.
+
+\subsection{Execution Controls}
+
+The interaction area also provides control elements for applying and updating 
+the selected configuration:
+
+\begin{itemize}
+    \item \textbf{Set trend:} Applies the selected trend method to the current dataset.
+    \item \textbf{Render:} Updates all visualizations according to the selected filters and parameters.
+    \item \textbf{Statistical summary:} Displays descriptive statistics (mean, minimum, maximum, and number of observations) for the filtered data.
+\end{itemize}
+
+
+
 
 \subsection{Map}
+
+The map view enables spatial feature screening. Regional differences in wind magnitude or temperature indicate whether spatial heterogeneity should be considered in later modeling stages.
+
+The combination of a spatial overview and a linked temporal detail view follows the overview+detail principle described in time-oriented visualization literature \parencite[p.380]{aigner_time_oriented_data}. The map provides global context, while the time series plot offers detailed inspection for selected locations.
+
+Spatial inspection supports decisions such as:
+
+\begin{itemize}
+    \item Regional covering of the data
+    \item Identification of spatial outliers
+    \item Assessment of spatial data coverage
+\end{itemize}
+
 
 
 \begin{figure}[htbp]
@@ -214,49 +367,43 @@ text text
 \end{figure}
 
 
+\subsection{Time Series Plot}
 
-\subsection{Timeseries plot}
+The time series plot represents the temporal analysis stage. Line plots are well suited for continuous temporal data and support identification of trends and cyclic patterns \parencite{aigner_time_oriented_data}.
 
-Line plot, 2 in Wind mode. 
+Temporal inspection enables:
+
+\begin{itemize}
+    \item Detection of seasonal variability
+    \item Assessment of long-term trends
+    \item Identification of anomalies
+\end{itemize}
 
 \begin{figure}[htbp]
-  \centering
-  \includegraphics[width=1.05\textwidth]{reports/Thesis Report/figures/interface_line_plot.png}
-  \caption{lineplot with temperature}
-  \label{fig:interface_line_plot}
+\centering
+\includegraphics[width=1.1\textwidth]{reports/Thesis Report/figures/interface_line_plot.png}
+\caption{Time series visualization for temperature.}
+\label{fig:interface_line_plot}
 \end{figure}
 
 
-And with glacier data:
-
-
-sample textsample textsample text
-sample textsample text
-sample text
-
-
-
-
-
 \begin{figure}[htbp]
-  \centering
-  \includegraphics[width=1.05\textwidth]{reports/Thesis Report/figures/interface_line_plot_wind.png}
-  \caption{lineplot with wind}
-  \label{fig:interface_line_plot_wind}
+\centering
+\includegraphics[width=1.1\textwidth]{reports/Thesis Report/figures/interface_line_plot_wind.png}
+\caption{Time series visualization including wind-related data.}
+\label{fig:interface_line_plot_wind}
 \end{figure}
-
-
-
-
 
 \newpage
 
+When glacier mass balance data are included, meteorological variables and glacier measurements can be compared within the same temporal frame. This coordinated view supports hypothesis-driven feature screening prior to model training.
 
-\section{Implementation}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.2\textwidth]{reports/Thesis Report/figures/interface_glacier_trend.png}
+\caption{Time series visualization of temperature and glacier observation with trend lines for both. With the manipulation controls for the glacier data.}
+\label{fig:interface_glacier_trend}
+\end{figure}
 
-Here I want to provide some insights, how the implementation is done. I will focus only on the key parts and the most important learnings.
-
-Panel + Bokeh
-
-
+\newpage
 

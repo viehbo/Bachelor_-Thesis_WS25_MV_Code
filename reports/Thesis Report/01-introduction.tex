@@ -20,21 +20,32 @@
 
 
 \chapter{Introduction}
-\label{sec:introduction}
+\label{ch:introduction}
 
 
 \section{Motivation}
 \label{sec:introduction:motivation}
+Climate change represents a multidimensional global challenge with significant environmental, economic, and societal implications. Artificial Intelligence (AI) is increasingly recognized as a promising tool for climate modeling and data-driven Earth system analysis \parencite{stern_climate_transition_2025}. However, the performance of AI systems strongly depends on the quality, structure, and relevance of the underlying data. Before model training, careful preprocessing, feature assessment, and dimensionality reduction are essential.
 
-Clinmate Change is one of the most challenging task we are facing. Technologies are often named as solution. If one digs a bit deeper, many technological inventions are very energy consuming by itself. Especially when it comes to AI, the high amount of power and water consumption is huge and still on the rise.
-In my opinion, a lot unnecessary computation is going on, driven by a "trial and error" approach. This is often based by a weak preselection of the used data. When it comes to meteorological data, one encounters a overwhelming amount of data. Just using all of them and interpret the model-outcome is simply impossible.
-This is where GlacyVis come into play. It gives you deep insight into the data and with that an idea, what they can be used for and how. On the other hand, a user can judge if specific observations are even suitable for a potential machine learning task.
+In practice, substantial computational resources are often consumed by iterative 'trial-and-error' model experimentation based on weak or insufficient data preselection. This issue becomes particularly relevant in meteorological research, where datasets exhibit extremely high spatial and temporal resolution. Simply incorporating all available variables into a model and interpreting the outcome is neither computationally efficient nor scientifically rigorous. And on consumer hardware simply impossible.
+
+As shown in Table~\ref{tab:era5_land_dimensions}, the ERA5-Land dataset alone consists approximately 1.65 million spatial grid cells with 75 years of hourly observations (reanalyzed). This results in an extraordinarily large and highly multidimensional data space.
+
+\textit{glaciVis} is designed to address this challenge. The system enables structured visual exploration of large-scale meteorological datasets and supports the identification of potentially relevant variables prior to machine learning model development. By providing interactive analytical tools, it allows researchers to evaluate whether specific observations are suitable candidates for predictive modeling tasks.
 
 
-\section{The ERA5 Dataset}
-\label{sec:intruduction:data}
+\newpage
+%\section{The ERA5 Dataset}
+%\label{sec:intruduction:data}
 
-The ERA5-Land hourly data is a high quality, very dense dataset.
+\vspace{1em}
+
+\noindent\underline{\textbf{The ERA5 Dataset}}
+
+\noindent There exist various variants of ERA5 datasets. They differ in resolution, number and kind of variables and which regions they cover.
+As an example, one of these is shown here:
+
+\noindent The \textbf{ERA5-Land hourly data} is a high quality, very dense dataset.
 Just to get a feeling of the size, here a few numbers\cite{era5_land_earthdatahub}:
 
 \begin{table}[htbp]
@@ -57,29 +68,50 @@ This makes an approximate number of $5.3*10^{13}$ data points. In ARCO Zarr v3\p
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.5\textwidth]{reports/Thesis Report/figures/ERA5_land_map.png}
+  \includegraphics[width=0.7\textwidth]{reports/Thesis Report/figures/ERA5_land_map.png}
   \caption{Overview visualization of the ERA5-Land reanalysis dataset.
   Source: Copernicus Climate Change Service (C3S) \cite{era5_land_image}.}
   \label{fig:era5_land_overview}
 \end{figure}
 
 
+\newpage
 
 
 \section{Objectives and Approach}
 \label{sec:introduction:objectives}
+The initial objective of this work was to visually compare glacier-related data with meteorological variables derived from ERA5.
+The underlying hypothesis was that significant correlations between glacier dynamics and specific atmospheric or land-surface variables could be identified. 
+Such relations would represent promising feature candidates for a subsequent machine learning task aimed at predicting glacier melt and, potentially, uncovering contributing factors beyond temperature alone.
 
-The objective is now to find a way how data from ERA5 can be discovered in an efficient and intuitive way.
-This project is based on the work from \textit{Practical Work in AI (364055,2024W)} which I have done in winter semester 2024. Many insights have accelerated the progress of this thesis project and led to a more appropriate approach to data processing and presentation.
-Due to the huge amount of data and the complexity, 
+Although the intended identification of strong predictive relationships proved more challenging than anticipated, the exploratory analysis of the ERA5 dataset yielded valuable insights.
+In particular, the visualization-driven investigation significantly improved the understanding of variable behavior, seasonal patterns, and long-term trends within the dataset.
 
+This project builds upon prior work conducted within the course \textit{Practical Work in AI (364055, 2024W)} during the winter semester 2024.
+The methodological insights gained in that context accelerated the development of this thesis and contributed to a more systematic strategy for data preprocessing, integration of heterogeneous data sources, and interactive visualization design.
 
+Given the substantial data volume, high temporal resolution, and multidimensional structure of the ERA5 dataset, a dedicated preprocessing and visualization pipeline was developed to ensure scalability, interpretability, and analytical reliability. While the original prediction objective was only partially achieved, the resulting framework \textit{glaciVis} provides a robust foundation for structured feature exploration for future machine learning applications.
 
+\section{Use of AI Tools}
+\label{sec:use_of_ai}
+Throughout this project, AI-based tools were used both explicitly through
+direct prompting and implicitly through features integrated into the
+development environments.
 
-\section{Outline}
-\label{sec:introduction:outline}
+\paragraph{Explicit use:}\mbox{}\\
 
+\textbf{Programming:} ChatGPT and Claude were used for navigating package
+documentation and debugging. Where these tools contributed substantially to the
+implementation, this is documented as comments in the source code.
 
+\textbf{Writing:} ChatGPT, Claude, and DeepL were used to check grammar and
+spelling, and in some cases to reformulate individual sentences for clarity.
+All content, unless explicitly cited, was written by myself.
 
-%% 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\paragraph{Implicit use:}\mbox{}\\
+
+Development environments such as PyCharm and Overleaf provide built-in
+AI-driven features for code suggestions, error detection, and grammar
+checking. While these tools were active during development, they do not
+contribute to the substantive content of this work and are mentioned here
+solely for transparency.

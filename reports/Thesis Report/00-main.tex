@@ -1,4 +1,4 @@
-% View link: https://www.overleaf.com/read/wygtrfbdkpxw#8c9d5a
+%% View link: https://www.overleaf.com/read/wygtrfbdkpxw#8c9d5a
 
 \documentclass{jku-icg-thesis}
 
@@ -11,7 +11,6 @@
 \usepackage{wrapfig}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, fit}
-%%\usetikzlibrary{positioning}
 \usepackage{placeins}
 \usepackage{subcaption}
 
@@ -29,8 +28,8 @@
 
 % define the title and author as usual
 % the class adds a macro for the immatriculation number
-\title{Glacivis}
-\subtitle{An interactive tool for exploring weather data and ther influence on glaciers}
+\title{glaciVis}
+\subtitle{Interactive Visual Exploration of ERA5 Data for Glacier Research}
 \author{Mario Viehböck}
 
 \date{\today}
@@ -39,7 +38,9 @@
 %    you can specify special roles like this
 %       \supervisor[Erstbetreuer]{First Supervisor}
 %       \supervisor[Zweitbetreuer]{Second Supervisor}
-\supervisor{First Supervisor}
+\supervisor[Erstbetreuer]{Univ.-Prof. DI Dr. Marc Streit}
+\supervisor[Zweitbetreuer]{DI Dr. Andreas Hinterreiter}
+\supervisor[Zweitbetreuer]{DI Dr. Christina Humer}
 
 % provide some information on the thesis
 \thesissetup{
@@ -78,7 +79,7 @@
 %% appendix
 
 
-\include{frontmatter/quote}
+%%\include{frontmatter/quote}
 \include{frontmatter/affidavit}
 \include{frontmatter/abstract-en}
 %%\include{frontmatter/abstract-de}
@@ -109,8 +110,8 @@
 
 \printbibliography[title = {References}, heading = bibintoc]
 
-\begin{icgAppendix}
-  \include{ax-appendix}
-\end{icgAppendix}
+%\begin{icgAppendix}
+%  \include{ax-appendix}
+%\end{icgAppendix}
 
 \end{document}
