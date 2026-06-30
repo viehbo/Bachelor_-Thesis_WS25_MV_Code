@@ -4,9 +4,9 @@ The objective of this project is not just the development of an interactive visu
 The visualization component serves as an analytical instrument to explore correlations, assess data quality, and identify relevant feature candidates before model training.
 
 Within the context of Artificial Intelligence and Computer Graphics, the work combines efficient data handling with interactive visual exploration. Large-scale climate datasets such as ERA5 are high-dimensional and spatio-temporal.
-The Direct application of machine learning methods without prior inspection may lead to inappropriate feature selection or unnecessary computational cost. Interactive visualization enables hypothesis checking, feature screening, and validation before committing to automated modeling approaches.
+The direct application of machine learning methods without prior inspection may lead to inappropriate feature selection or unnecessary computational cost. Interactive visualization enables hypothesis checking, feature screening, and validation before committing to automated modeling approaches.
 
-The \textit{glaciVis} therefore acts as a bridge between raw geospatial climate data and structured machine learning workflows.
+\textit{glaciVis} therefore acts as a bridge between raw geospatial climate data and structured machine learning workflows.
 
 
 \section{Conceptual Design Choices}
@@ -188,7 +188,7 @@ Several design decisions ensure that the tool remains responsive even when handl
 
 \subsection{File Selection}
 
-The file selection area defines the temporal range and dataset configuration. Restricting dataset definition to a dedicated section ensures that subsequent analyses remain reproducible. All later interactions are explicitly linked to the selected temporal and spatial scope.
+The file selection area defines the temporal range and dataset configuration. Restricting dataset definition to a dedicated section ensures that subsequent analyse remain reproducible. All later interactions are explicitly linked to the selected temporal and spatial scope.
 
 \begin{figure}[htbp]
   \centering
@@ -210,7 +210,7 @@ All parameter changes influence only subsequent visualization components and do 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.6\textwidth]{reports/Thesis Report/figures/interface_controls.png}
-  \caption{Area of controls, which are influences all upcoming visualizations}
+  \caption{Area of controls, which are influence all upcoming visualizations}
   \label{fig:interface_controls}
 \end{figure}
 
@@ -257,26 +257,31 @@ In the following, the functional principles of the implemented methods are brief
 \vspace{1em}
 \noindent\textbf{Pre-smoothing (optional)}
 
-If enabled, the original time series $y(t)$ is smoothed using a centered moving average with window length $W$. For each time step, the mean of the values within the selected window is calculated:
+If enabled, the original time series $y(t)$ is first smoothed using a
+\emph{centered} moving average with an odd window length $W = 2k+1$. For each
+time step $t$, the mean of the $k$ values before and after the current sample
+is calculated:
 
 \begin{equation}
-\tilde{y}(t) = \frac{1}{N} \sum_{i=1}^{N} y(t_i)
+\tilde{y}(t) = \frac{1}{2k+1} \sum_{j=-k}^{k} y(t+j)
 \end{equation}
 
-This optional step reduces short-term variability before applying the 
-actual trend method.
+This optional step reduces short-term variability symmetrically around each
+sample before the actual trend method is applied.
 
 \vspace{1em}
 \noindent\textbf{Rolling Mean}
 
-The rolling mean calculates a local average over a defined time window $W$. 
-For each time step, the mean of the surrounding observations is computed:
+In contrast to the centered pre-smoothing, the rolling mean uses a
+\emph{trailing} window of length $W$. For each time step $t$, the average of
+the current and the $W-1$ preceding observations is computed:
 
 \begin{equation}
-\hat{y}(t) = \frac{1}{N} \sum_{i=1}^{N} y(t_i)
+\hat{y}(t) = \frac{1}{W} \sum_{j=0}^{W-1} y(t-j)
 \end{equation}
 
-This method provides a simple and intuitive smoothing of the time series.
+This method provides a simple and intuitive smoothing of the time series,
+following the temporal direction of the data.
 
 \vspace{1em}
 \noindent\textbf{Exponentially Weighted Moving Average (EWMA)}
